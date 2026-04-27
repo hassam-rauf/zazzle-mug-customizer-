@@ -1,0 +1,321 @@
+import React from 'react';
+
+// ─── Mockup SVG Components ────────────────────────────────────────────────────
+// All SVGs share the same 240×240 canvas, a pastel circle backdrop,
+// and a consistent minimal-illustration style.
+
+const MugMockup = () => (
+  <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    <circle cx="120" cy="120" r="104" fill="#EEF2FF" />
+    {/* Body */}
+    <rect x="74" y="82" width="88" height="98" rx="12" fill="white" stroke="#C7D2FE" strokeWidth="1.5" />
+    {/* Handle */}
+    <path d="M162 104 C192 104 192 134 192 150 C192 166 183 172 162 172"
+          stroke="#C7D2FE" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+    {/* Rim */}
+    <ellipse cx="118" cy="82" rx="44" ry="8" fill="#C7D2FE" opacity="0.45" />
+    {/* Liquid surface */}
+    <ellipse cx="118" cy="89" rx="40" ry="5.5" fill="#818CF8" opacity="0.18" />
+    {/* Design band */}
+    <rect x="74" y="122" width="88" height="26" fill="#C7D2FE" opacity="0.28" />
+    {/* Heart motif */}
+    <path d="M108 133 C108 129 113 127 118 131 C123 127 128 129 128 133 C128 138 118 144 118 144 C118 144 108 138 108 133Z"
+          fill="#818CF8" opacity="0.55" />
+    {/* Steam */}
+    <path d="M99 72 Q102 63 99 54" stroke="#818CF8" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.45" />
+    <path d="M118 68 Q121 59 118 50" stroke="#818CF8" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.45" />
+    <path d="M137 72 Q140 63 137 54" stroke="#818CF8" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.45" />
+  </svg>
+);
+
+const PhotoBookMockup = () => (
+  <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    <circle cx="120" cy="120" r="104" fill="#F3E8FF" />
+    {/* Back page */}
+    <rect x="73" y="67" width="102" height="116" rx="7" fill="#E9D5FF" opacity="0.55"
+          transform="rotate(-3 73 67)" />
+    {/* Mid page */}
+    <rect x="69" y="63" width="102" height="116" rx="7" fill="#F3E8FF" opacity="0.8"
+          transform="rotate(-1 69 63)" />
+    {/* Front cover */}
+    <rect x="66" y="60" width="102" height="116" rx="7" fill="white" stroke="#DDD6FE" strokeWidth="1.5" />
+    {/* Spine */}
+    <rect x="66" y="60" width="13" height="116" rx="7" fill="#DDD6FE" opacity="0.55" />
+    {/* Photo area */}
+    <rect x="84" y="72" width="74" height="54" rx="5" fill="#EDE9FE" />
+    {/* Landscape in photo */}
+    <path d="M84 126 L103 100 L117 113 L130 93 L158 126Z" fill="#C4B5FD" opacity="0.55" />
+    {/* Sky */}
+    <rect x="84" y="72" width="74" height="28" rx="5" fill="#DDD6FE" opacity="0.3" />
+    {/* Sun */}
+    <circle cx="146" cy="83" r="9" fill="#FDE68A" opacity="0.9" />
+    {/* Text stubs */}
+    <rect x="84" y="136" width="56" height="5" rx="2.5" fill="#DDD6FE" />
+    <rect x="84" y="147" width="40" height="4" rx="2" fill="#EDE9FE" />
+    <rect x="84" y="157" width="65" height="4" rx="2" fill="#EDE9FE" />
+  </svg>
+);
+
+const TshirtMockup = () => (
+  <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    <circle cx="120" cy="120" r="104" fill="#ECFDF5" />
+    {/* Shirt silhouette */}
+    <path d="M68 92 L52 68 L78 57 L90 73 Q120 80 150 73 L162 57 L188 68 L172 92 L156 84 L156 178 Q120 183 84 178 L84 84 Z"
+          fill="white" stroke="#6EE7B7" strokeWidth="1.5" />
+    {/* Collar */}
+    <path d="M90 73 Q104 90 120 88 Q136 90 150 73" stroke="#6EE7B7" strokeWidth="1.5" fill="none" />
+    {/* Chest emblem circle */}
+    <circle cx="120" cy="122" r="20" fill="#D1FAE5" />
+    {/* Checkmark */}
+    <path d="M112 122 L117 128 L129 112" stroke="#10B981" strokeWidth="2.5"
+          strokeLinecap="round" strokeLinejoin="round" fill="none" />
+  </svg>
+);
+
+const PhoneCaseMockup = () => (
+  <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    <defs>
+      <linearGradient id="pgrd" x1="88" y1="60" x2="152" y2="180" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#BFDBFE" />
+        <stop offset="100%" stopColor="#93C5FD" />
+      </linearGradient>
+    </defs>
+    <circle cx="120" cy="120" r="104" fill="#EFF6FF" />
+    {/* Case shell */}
+    <rect x="80" y="48" width="80" height="144" rx="20" fill="#DBEAFE" stroke="#93C5FD" strokeWidth="1.5" />
+    {/* Screen */}
+    <rect x="88" y="60" width="64" height="120" rx="14" fill="white" />
+    <rect x="88" y="60" width="64" height="120" rx="14" fill="url(#pgrd)" opacity="0.75" />
+    {/* Camera notch */}
+    <circle cx="120" cy="69" r="5" fill="#BFDBFE" stroke="#93C5FD" strokeWidth="1" />
+    {/* Home bar */}
+    <rect x="109" y="170" width="22" height="3.5" rx="1.75" fill="#93C5FD" />
+    {/* Centered monogram on screen */}
+    <circle cx="120" cy="116" r="22" fill="white" opacity="0.28" />
+    <path d="M110 116 L115.5 122 L131 106" stroke="white" strokeWidth="3"
+          strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    {/* Side buttons */}
+    <rect x="78" y="88" width="3" height="22" rx="1.5" fill="#93C5FD" />
+    <rect x="159" y="82" width="3" height="16" rx="1.5" fill="#93C5FD" />
+    <rect x="159" y="103" width="3" height="16" rx="1.5" fill="#93C5FD" />
+  </svg>
+);
+
+const InvitationCardMockup = () => (
+  <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    <circle cx="120" cy="120" r="104" fill="#FFF7ED" />
+    {/* Shadow card */}
+    <rect x="56" y="65" width="130" height="112" rx="9" fill="#FED7AA" opacity="0.38"
+          transform="rotate(3 56 65)" />
+    {/* Main card */}
+    <rect x="52" y="60" width="130" height="112" rx="9" fill="white" stroke="#FED7AA" strokeWidth="1.5" />
+    {/* Top accent bar */}
+    <rect x="52" y="60" width="130" height="6" rx="3" fill="#FDBA74" opacity="0.7" />
+    {/* Inner dashed frame */}
+    <rect x="64" y="76" width="106" height="86" rx="5" fill="none" stroke="#FDBA74"
+          strokeWidth="1" strokeDasharray="5 4" />
+    {/* Corner florals */}
+    {[[68, 80], [178, 80], [68, 158], [178, 158]].map(([cx, cy], i) => (
+      <circle key={i} cx={cx} cy={cy} r="4.5" fill="#FED7AA" />
+    ))}
+    {/* Headline stub */}
+    <rect x="87" y="96" width="72" height="8" rx="4" fill="#FDBA74" opacity="0.65" />
+    {/* Subhead stub */}
+    <rect x="97" y="111" width="52" height="5" rx="2.5" fill="#FED7AA" />
+    {/* Divider */}
+    <line x1="76" y1="124" x2="164" y2="124" stroke="#FED7AA" strokeWidth="1" />
+    {/* Body stubs */}
+    <rect x="76" y="133" width="84" height="3.5" rx="1.75" fill="#FEE8D5" />
+    <rect x="82" y="142" width="72" height="3.5" rx="1.75" fill="#FEE8D5" />
+    <rect x="90" y="151" width="56" height="3.5" rx="1.75" fill="#FEE8D5" />
+  </svg>
+);
+
+const WallFrameMockup = () => (
+  <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    <circle cx="120" cy="120" r="104" fill="#FEFCE8" />
+    {/* Hanging wire */}
+    <path d="M96 56 Q120 47 144 56" stroke="#FCD34D" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+    <circle cx="120" cy="46" r="3.5" fill="#FCD34D" />
+    {/* Frame */}
+    <rect x="54" y="56" width="132" height="132" rx="7" fill="#FDE68A" stroke="#FCD34D" strokeWidth="1.5" />
+    {/* Mat */}
+    <rect x="70" y="72" width="100" height="100" rx="4" fill="#FFFBEB" />
+    {/* Art area */}
+    <rect x="79" y="81" width="82" height="82" rx="3" fill="#FEF3C7" />
+    {/* Sky wash */}
+    <rect x="79" y="81" width="82" height="38" rx="3" fill="#FEF9C3" />
+    {/* Mountains */}
+    <path d="M79 163 L101 130 L118 148 L134 116 L161 163Z" fill="#FCD34D" opacity="0.45" />
+    <path d="M79 163 L100 140 L115 154 L132 126 L161 163Z" fill="#FDE68A" opacity="0.4" />
+    {/* Sun */}
+    <circle cx="143" cy="97" r="11" fill="#FBBF24" opacity="0.65" />
+  </svg>
+);
+
+const GiftBoxMockup = () => (
+  <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    <circle cx="120" cy="120" r="104" fill="#FFF1F2" />
+    {/* Box body */}
+    <rect x="70" y="114" width="100" height="76" rx="5" fill="white" stroke="#FDA4AF" strokeWidth="1.5" />
+    {/* Ribbon stripe on body */}
+    <rect x="109" y="114" width="22" height="76" fill="#FCE7F3" opacity="0.55" />
+    {/* Lid */}
+    <rect x="66" y="88" width="108" height="27" rx="5" fill="#FDA4AF" stroke="#FB7185" strokeWidth="1.5" />
+    {/* Ribbon on lid */}
+    <rect x="109" y="88" width="22" height="27" fill="#FB7185" opacity="0.5" />
+    {/* Bow loops */}
+    <path d="M120 88 Q94 68 88 77 Q82 86 106 94Z" fill="#FB7185" opacity="0.8" />
+    <path d="M120 88 Q146 68 152 77 Q158 86 134 94Z" fill="#FB7185" opacity="0.8" />
+    {/* Bow knot */}
+    <circle cx="120" cy="90" r="7" fill="#E11D48" />
+    {/* Body highlight */}
+    <rect x="70" y="114" width="100" height="10" rx="0" fill="#FEE2E2" opacity="0.45" />
+    {/* Polka dots */}
+    <circle cx="89" cy="138" r="4.5" fill="#FEE2E2" />
+    <circle cx="105" cy="160" r="3.5" fill="#FEE2E2" />
+    <circle cx="143" cy="143" r="4.5" fill="#FEE2E2" />
+    <circle cx="156" cy="165" r="3" fill="#FEE2E2" />
+  </svg>
+);
+
+const OfficeMockup = () => {
+  const ruleLines = [84, 97, 110, 123, 136, 149, 162];
+  return (
+    <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+      <circle cx="120" cy="120" r="104" fill="#F0FDF4" />
+      {/* Notebook */}
+      <rect x="58" y="68" width="90" height="114" rx="7" fill="white" stroke="#86EFAC" strokeWidth="1.5" />
+      {/* Spine */}
+      <rect x="58" y="68" width="11" height="114" rx="7" fill="#86EFAC" opacity="0.55" />
+      {/* Spiral binding holes */}
+      {[80, 93, 106, 119, 132, 145, 158].map((y, i) => (
+        <circle key={i} cx="63.5" cy={y} r="3.5" fill="white" stroke="#4ADE80" strokeWidth="1.5" />
+      ))}
+      {/* Ruled lines */}
+      {ruleLines.map((y, i) => (
+        <line key={i} x1="76" y1={y} x2="140" y2={y} stroke="#DCFCE7" strokeWidth="1.5" />
+      ))}
+      {/* Pen */}
+      <rect x="156" y="64" width="16" height="104" rx="8" fill="#4ADE80" opacity="0.82" />
+      {/* Pen tip */}
+      <polygon points="156,168 172,168 164,186" fill="#16A34A" />
+      {/* Pen cap */}
+      <rect x="156" y="64" width="16" height="14" rx="8" fill="#86EFAC" />
+      {/* Clip */}
+      <rect x="161" y="64" width="5" height="28" rx="2.5" fill="#86EFAC" opacity="0.8" />
+    </svg>
+  );
+};
+
+// ─── Category Data ─────────────────────────────────────────────────────────────
+
+const CATEGORIES = [
+  { id: 'mug',        title: 'Mugs',               Mockup: MugMockup },
+  { id: 'photobook',  title: 'Photo Books',         Mockup: PhotoBookMockup },
+  { id: 'tshirt',     title: 'T-Shirts',            Mockup: TshirtMockup },
+  { id: 'phonecase',  title: 'Phone Cases',         Mockup: PhoneCaseMockup },
+  { id: 'invitation', title: 'Invitations',         Mockup: InvitationCardMockup },
+  { id: 'wallframe',  title: 'Wall Art',            Mockup: WallFrameMockup },
+  { id: 'giftbox',    title: 'Gift Boxes',          Mockup: GiftBoxMockup },
+  { id: 'office',     title: 'Stationery',          Mockup: OfficeMockup },
+];
+
+// ─── Arrow Icon ────────────────────────────────────────────────────────────────
+
+const ArrowIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+    <path d="M2.5 7h9M8 3.5l3.5 3.5L8 10.5"
+          stroke="currentColor" strokeWidth="1.5"
+          strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+// ─── Category Card ─────────────────────────────────────────────────────────────
+
+const CategoryCard = ({ title, Mockup }) => (
+  <a
+    href="#"
+    aria-label={`Shop ${title}`}
+    className={[
+      'group relative flex flex-col items-center',
+      'bg-white rounded-2xl p-3 sm:p-4',
+      'shadow-[0_2px_12px_rgba(0,0,0,0.06)]',
+      'hover:shadow-[0_12px_32px_rgba(0,0,0,0.12)]',
+      'transition-all duration-300 ease-out',
+      'hover:-translate-y-[6px]',
+      'cursor-pointer select-none',
+    ].join(' ')}
+  >
+    {/* Mockup image wrapper — overflow:hidden clips the scale-up */}
+    <div className="w-full aspect-square rounded-xl overflow-hidden mb-3">
+      <div className="w-full h-full transition-transform duration-300 ease-out group-hover:scale-[1.05]">
+        <Mockup />
+      </div>
+    </div>
+
+    {/* Title row */}
+    <div className="flex items-center justify-center gap-1 w-full px-0.5">
+      <span className="text-[11px] sm:text-xs font-semibold text-gray-600 tracking-wide text-center leading-tight line-clamp-2">
+        {title}
+      </span>
+      {/* Arrow fades in on hover */}
+      <span className="text-gray-300 group-hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-all duration-200 shrink-0 translate-x-0.5 group-hover:translate-x-0">
+        <ArrowIcon />
+      </span>
+    </div>
+  </a>
+);
+
+// ─── Section Header ────────────────────────────────────────────────────────────
+
+const SectionHeader = () => (
+  <div className="text-center mb-10 sm:mb-12">
+    <p className="text-xs font-bold tracking-[0.18em] text-indigo-500 uppercase mb-2">
+      Browse
+    </p>
+    <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 tracking-tight">
+      Shop by Category
+    </h2>
+    <p className="mt-3 text-sm sm:text-base text-gray-400 max-w-sm mx-auto leading-relaxed">
+      Personalize anything — from everyday essentials to meaningful gifts.
+    </p>
+  </div>
+);
+
+// ─── Browse All CTA ────────────────────────────────────────────────────────────
+
+const BrowseAllLink = () => (
+  <div className="text-center mt-10">
+    <a
+      href="#"
+      className="inline-flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-gray-800 transition-colors duration-200 group"
+    >
+      Browse all categories
+      <span className="transition-transform duration-200 group-hover:translate-x-1">
+        <ArrowIcon />
+      </span>
+    </a>
+  </div>
+);
+
+// ─── Main Export ───────────────────────────────────────────────────────────────
+
+const ShopByCategory = () => (
+  <section className="w-full bg-[#F7F8FA] py-14 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8">
+    <div className="max-w-7xl mx-auto">
+      <SectionHeader />
+
+      {/* Responsive grid: 2 → 4 → 8 columns */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4 lg:gap-5">
+        {CATEGORIES.map(({ id, title, Mockup }) => (
+          <CategoryCard key={id} title={title} Mockup={Mockup} />
+        ))}
+      </div>
+
+      <BrowseAllLink />
+    </div>
+  </section>
+);
+
+export default ShopByCategory;

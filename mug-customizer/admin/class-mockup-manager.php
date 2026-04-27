@@ -68,20 +68,51 @@ class Mug_Customizer_Mockup_Manager {
 
         echo '</tbody></table>';
 
-        // Print area config
-        echo '<h3 style="margin-top:20px;">' . esc_html__('Print Area Configuration (% of canvas)', 'mug-customizer') . '</h3>';
-        echo '<table class="widefat"><thead><tr><th>Style</th><th>Top %</th><th>Left %</th><th>Width %</th><th>Height %</th></tr></thead><tbody>';
+        // Visual Print Area Editor
+        echo '<h3 style="margin-top:20px;">' . esc_html__('Print Area — Visual Editor', 'mug-customizer') . '</h3>';
+        echo '<p class="description">' . esc_html__('Upload a front PNG for each style, then drag the orange box to set the exact print area. Resize using the corner handle.', 'mug-customizer') . '</p>';
 
         foreach ($styles as $style) {
-            $area = $print_config[$style] ?? ['top' => 22, 'left' => 18, 'width' => 64, 'height' => 56];
-            echo '<tr>';
-            echo '<td><strong>' . esc_html(ucfirst($style)) . '</strong></td>';
+            $area      = $print_config[$style] ?? ['top' => 22, 'left' => 18, 'width' => 64, 'height' => 56];
+            $front_key = "{$style}-11oz-black-front";
+            $png_url   = $mockup_map[$front_key] ?? '';
+
+            echo '<div class="mug-pae-editor" data-style="' . esc_attr($style) . '">';
+            echo '<h4>' . esc_html(ucfirst(str_replace('-', ' ', $style))) . '</h4>';
+            echo '<div class="mug-pae-wrap">';
+
+            // Visual canvas
+            $bg_style = $png_url ? 'background-image:url(' . esc_url($png_url) . ');' : '';
+            echo '<div class="mug-pae-canvas" style="' . esc_attr($bg_style) . '">';
+            echo '<div class="mug-pae-box" style="'
+                . 'top:'    . esc_attr($area['top'])    . '%%;'
+                . 'left:'   . esc_attr($area['left'])   . '%%;'
+                . 'width:'  . esc_attr($area['width'])  . '%%;'
+                . 'height:' . esc_attr($area['height']) . '%%;">';
+            echo '<span class="mug-pae-label">' . esc_html__('Print Area', 'mug-customizer') . '</span>';
+            echo '<div class="mug-pae-handle"></div>';
+            echo '</div>';
+            echo '</div>';
+
+            // Coordinate inputs
+            echo '<div class="mug-pae-coords">';
             foreach (['top', 'left', 'width', 'height'] as $prop) {
-                echo '<td><input type="number" name="print_area[' . esc_attr($style) . '][' . esc_attr($prop) . ']" value="' . esc_attr($area[$prop]) . '" min="0" max="100" style="width:70px;"></td>';
+                echo '<label class="mug-pae-coord-row">';
+                echo '<span>' . esc_html(ucfirst($prop)) . '</span>';
+                echo '<input type="number" '
+                    . 'class="mug-pae-input mug-pae-' . esc_attr($prop) . '" '
+                    . 'name="print_area[' . esc_attr($style) . '][' . esc_attr($prop) . ']" '
+                    . 'value="' . esc_attr($area[$prop]) . '" '
+                    . 'min="0" max="100">';
+                echo '<span>%</span>';
+                echo '</label>';
             }
-            echo '</tr>';
+            echo '<p class="mug-pae-hint">↔ Drag to move &nbsp; ◢ Corner to resize</p>';
+            echo '</div>';
+
+            echo '</div>'; // .mug-pae-wrap
+            echo '</div>'; // .mug-pae-editor
         }
-        echo '</tbody></table>';
 
         // Add-on prices
         echo '<h3 style="margin-top:20px;">' . esc_html__('Add-on Prices (USD)', 'mug-customizer') . '</h3>';

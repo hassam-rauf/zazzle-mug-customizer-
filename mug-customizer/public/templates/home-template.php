@@ -27,15 +27,16 @@ $new_arrivals = wc_get_products([
     'order'   => 'DESC',
 ]);
 
+$cat_img = MUG_CUSTOMIZER_PLUGIN_URL . 'public/assets/images/categories/';
 $categories = [
-    ['label' => 'Mugs',        'url' => $mugs_url, 'color' => '#f97316', 'icon' => '☕'],
-    ['label' => 'Photo Books', 'url' => $shop_url, 'color' => '#3b82f6', 'icon' => '📷'],
-    ['label' => 'Apparel',     'url' => $shop_url, 'color' => '#8b5cf6', 'icon' => '👕'],
-    ['label' => 'Phone Cases', 'url' => $shop_url, 'color' => '#06b6d4', 'icon' => '📱'],
-    ['label' => 'Invitations', 'url' => $shop_url, 'color' => '#ec4899', 'icon' => '💌'],
-    ['label' => 'Wall Art',    'url' => $shop_url, 'color' => '#ef4444', 'icon' => '🖼️'],
-    ['label' => 'Gifts',       'url' => $shop_url, 'color' => '#10b981', 'icon' => '🎁'],
-    ['label' => 'Office',      'url' => $shop_url, 'color' => '#1d4ed8', 'icon' => '📋'],
+    ['label' => 'Mugs',        'url' => $mugs_url, 'color' => '#f97316', 'img' => $cat_img . 'mugs.jpg'],
+    ['label' => 'Photo Books', 'url' => $shop_url, 'color' => '#3b82f6', 'img' => $cat_img . 'photo-books.jpg'],
+    ['label' => 'Apparel',     'url' => $shop_url, 'color' => '#8b5cf6', 'img' => $cat_img . 'apparel.jpg'],
+    ['label' => 'Phone Cases', 'url' => $shop_url, 'color' => '#06b6d4', 'img' => $cat_img . 'phone-cases.jpg'],
+    ['label' => 'Invitations', 'url' => $shop_url, 'color' => '#ec4899', 'img' => $cat_img . 'invitations.jpg'],
+    ['label' => 'Wall Art',    'url' => $shop_url, 'color' => '#ef4444', 'img' => $cat_img . 'wall-art.jpg'],
+    ['label' => 'Gifts',       'url' => $shop_url, 'color' => '#10b981', 'img' => $cat_img . 'gifts.jpg'],
+    ['label' => 'Office',      'url' => $shop_url, 'color' => '#1d4ed8', 'img' => $cat_img . 'office.jpg'],
 ];
 ?>
 <!DOCTYPE html>
@@ -127,21 +128,29 @@ $categories = [
     </div>
 
     <div class="home-hero-visual">
-      <div class="home-hero-cards">
+        <div class="home-hero-cards">
         <div class="home-mug-card home-mug-card-1">
-          <div class="home-mug-face">☕</div>
+          <div class="home-mug-face">
+            <img src="https://images.unsplash.com/photo-1528294941335-0d388bc8ac99?w=600&q=80&fit=crop&auto=format" alt="Custom Photo" loading="lazy">
+          </div>
           <div class="home-mug-caption">Custom Photo</div>
         </div>
         <div class="home-mug-card home-mug-card-2">
-          <div class="home-mug-face">🎨</div>
+          <div class="home-mug-face">
+            <img src="https://images.unsplash.com/photo-1522410818928-5522dacd5066?w=600&q=80&fit=crop&auto=format" alt="Artist Design" loading="lazy">
+          </div>
           <div class="home-mug-caption">Artist Design</div>
         </div>
         <div class="home-mug-card home-mug-card-3">
-          <div class="home-mug-face">💝</div>
+          <div class="home-mug-face">
+            <img src="https://images.unsplash.com/photo-1513201099705-a9746e1e201f?w=600&q=80&fit=crop&auto=format" alt="Personalized Gift" loading="lazy">
+          </div>
           <div class="home-mug-caption">Personalized Gift</div>
         </div>
         <div class="home-mug-card home-mug-card-4">
-          <div class="home-mug-face">✏️</div>
+          <div class="home-mug-face">
+            <img src="https://images.unsplash.com/photo-1679119790850-161688b0417e?w=600&q=80&fit=crop&auto=format" alt="Add Your Text" loading="lazy">
+          </div>
           <div class="home-mug-caption">Add Your Text</div>
         </div>
       </div>
@@ -151,17 +160,20 @@ $categories = [
 </section>
 
 <!-- ── Shop by Category ──────────────────────────────────────────────────── -->
-<section class="home-section">
+<section class="home-section home-section-cats">
   <div class="home-section-inner">
     <div class="home-section-hdr">
-      <h2 class="home-section-title">Shop by Category</h2>
+      <div>
+        <p class="home-cat-eyebrow">Browse</p>
+        <h2 class="home-section-title">Shop by Category</h2>
+      </div>
       <a href="<?php echo esc_url($shop_url); ?>" class="home-see-all">See All &rarr;</a>
     </div>
     <div class="home-cat-grid">
       <?php foreach ($categories as $cat): ?>
         <a href="<?php echo esc_url($cat['url']); ?>" class="home-cat-card" style="--cat-clr:<?php echo esc_attr($cat['color']); ?>">
           <div class="home-cat-thumb">
-            <span class="home-cat-emoji"><?php echo $cat['icon']; ?></span>
+            <img src="<?php echo esc_url($cat['img']); ?>" alt="<?php echo esc_attr($cat['label']); ?>" loading="lazy">
           </div>
           <span class="home-cat-name"><?php echo esc_html($cat['label']); ?></span>
         </a>
@@ -241,15 +253,21 @@ $categories = [
     <div class="home-gifting-visual">
       <div class="home-gift-stack">
         <div class="home-gift-mug home-gift-mug-a">
-          <div class="home-gift-mug-body">☕</div>
+          <div class="home-gift-mug-body">
+            <img src="https://images.unsplash.com/photo-1625649611137-df49dc542f6a?w=400&q=80&fit=crop&auto=format" alt="Birthday" loading="lazy">
+          </div>
           <div class="home-gift-mug-lbl">Birthday</div>
         </div>
         <div class="home-gift-mug home-gift-mug-b">
-          <div class="home-gift-mug-body">☕</div>
+          <div class="home-gift-mug-body">
+            <img src="https://images.unsplash.com/photo-1653581489939-a5884bd10795?w=400&q=80&fit=crop&auto=format" alt="Anniversary" loading="lazy">
+          </div>
           <div class="home-gift-mug-lbl">Anniversary</div>
         </div>
         <div class="home-gift-mug home-gift-mug-c">
-          <div class="home-gift-mug-body">☕</div>
+          <div class="home-gift-mug-body">
+            <img src="https://images.unsplash.com/photo-1764175760784-d481a3862a52?w=400&q=80&fit=crop&auto=format" alt="Holiday" loading="lazy">
+          </div>
           <div class="home-gift-mug-lbl">Holiday</div>
         </div>
       </div>
@@ -315,18 +333,22 @@ $categories = [
     <div class="home-inspo-grid">
       <?php
       $inspo = [
-        ['title' => 'Birthday Mug Ideas',    'sub' => 'Make their day unforgettable',         'bg' => '#fef3c7', 'ico' => '🎂'],
-        ['title' => 'Office &amp; Desk',      'sub' => 'Bring personality to your workspace',  'bg' => '#ede9fe', 'ico' => '💼'],
-        ['title' => 'Pet Photo Mugs',         'sub' => 'Celebrate your furry best friend',     'bg' => '#dcfce7', 'ico' => '🐾'],
-        ['title' => 'Wedding Favors',         'sub' => 'Gifts your guests will cherish',       'bg' => '#fce7f3', 'ico' => '💍'],
+        ['title' => 'Birthday Mug Ideas', 'sub' => 'Make their day unforgettable',        'bg' => '#fef3c7', 'img' => 'https://images.unsplash.com/photo-1638417568260-32cd7abd212c?w=600&q=80&fit=crop&auto=format'],
+        ['title' => 'Office &amp; Desk',  'sub' => 'Bring personality to your workspace', 'bg' => '#ede9fe', 'img' => 'https://images.unsplash.com/photo-1746021535489-00edc5efb203?w=600&q=80&fit=crop&auto=format'],
+        ['title' => 'Pet Photo Mugs',     'sub' => 'Celebrate your furry best friend',    'bg' => '#dcfce7', 'img' => 'https://images.unsplash.com/photo-1450778869180-41d0601e046e?w=600&q=80&fit=crop&auto=format'],
+        ['title' => 'Wedding Favors',     'sub' => 'Gifts your guests will cherish',      'bg' => '#fce7f3', 'img' => 'https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?w=600&q=80&fit=crop&auto=format'],
       ];
       foreach ($inspo as $card): ?>
-        <div class="home-inspo-card" style="background:<?php echo esc_attr($card['bg']); ?>">
-          <div class="home-inspo-ico"><?php echo $card['ico']; ?></div>
-          <h4 class="home-inspo-title"><?php echo wp_kses_post($card['title']); ?></h4>
-          <p class="home-inspo-sub"><?php echo esc_html($card['sub']); ?></p>
-          <a href="<?php echo esc_url($mugs_url); ?>" class="home-inspo-link">Explore &rarr;</a>
-        </div>
+        <a href="<?php echo esc_url($mugs_url); ?>" class="home-inspo-card">
+          <div class="home-inspo-img">
+            <img src="<?php echo esc_url($card['img']); ?>" alt="<?php echo esc_attr(wp_strip_all_tags($card['title'])); ?>">
+          </div>
+          <div class="home-inspo-body" style="background:<?php echo esc_attr($card['bg']); ?>">
+            <h4 class="home-inspo-title"><?php echo wp_kses_post($card['title']); ?></h4>
+            <p class="home-inspo-sub"><?php echo esc_html($card['sub']); ?></p>
+            <span class="home-inspo-link">Explore &rarr;</span>
+          </div>
+        </a>
       <?php endforeach; ?>
     </div>
   </div>
