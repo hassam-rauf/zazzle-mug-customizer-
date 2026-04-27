@@ -1,0 +1,620 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zazzle Mug Builder — UI Flow Mockup</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --brand:#0066cc; --brand-dark:#004a99; --accent:#ff6a00;
+    --bg:#f5f6f8; --card:#ffffff; --ink:#1a1a1a; --muted:#6b7280;
+    --border:#e5e7eb; --ok:#16a34a;
+  }
+  html, body { font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); line-height:1.5; }
+
+  /* Flow navigator */
+  .flow-nav { position:sticky; top:0; z-index:100; background:#111; color:#fff; padding:12px 20px; display:flex; gap:8px; overflow-x:auto; }
+  .flow-nav a { color:#fff; text-decoration:none; padding:6px 14px; border-radius:999px; font-size:13px; background:#2a2a2a; white-space:nowrap; }
+  .flow-nav a:hover { background:var(--brand); }
+  .flow-nav a.modal-link { background:var(--accent); }
+
+  .page { max-width:1280px; margin:40px auto; background:var(--card); border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.06); overflow:hidden; }
+  .page-label { background:linear-gradient(90deg, var(--brand), var(--brand-dark)); color:#fff; padding:14px 24px; font-size:14px; letter-spacing:.5px; text-transform:uppercase; display:flex; justify-content:space-between; align-items:center; }
+  .page-label .step { background:rgba(255,255,255,.2); padding:4px 12px; border-radius:999px; font-size:12px; }
+
+  /* Shared top bar */
+  .topbar { display:flex; align-items:center; padding:14px 24px; border-bottom:1px solid var(--border); gap:18px; }
+  .logo { font-size:26px; font-weight:900; color:var(--brand); letter-spacing:-.5px; }
+  .search { flex:1; display:flex; border:2px solid var(--brand); border-radius:6px; overflow:hidden; max-width:600px; }
+  .search input { flex:1; border:0; padding:10px 14px; outline:none; font-size:14px; }
+  .search button { background:var(--brand); color:#fff; border:0; padding:0 20px; font-weight:600; cursor:pointer; }
+  .top-actions { display:flex; gap:16px; font-size:13px; color:#333; }
+  .top-actions span { cursor:pointer; }
+
+  .nav-cats { display:flex; gap:24px; padding:10px 24px; border-bottom:1px solid var(--border); font-size:14px; color:#333; overflow-x:auto; }
+  .nav-cats a { color:#333; text-decoration:none; white-space:nowrap; }
+  .nav-cats a.active { color:var(--brand); font-weight:700; }
+
+  /* PAGE 1: LANDING */
+  .hero { height:360px; background:linear-gradient(135deg, #1e3a8a, #0066cc, #06b6d4); color:#fff; display:flex; align-items:center; justify-content:center; flex-direction:column; text-align:center; padding:20px; }
+  .hero h1 { font-size:44px; font-weight:800; margin-bottom:10px; }
+  .hero p { font-size:18px; opacity:.95; margin-bottom:20px; }
+  .hero button { background:var(--accent); color:#fff; border:0; padding:14px 32px; font-size:16px; font-weight:700; border-radius:6px; cursor:pointer; }
+
+  .section-title { font-size:22px; font-weight:700; padding:30px 24px 16px; }
+  .cat-grid { display:grid; grid-template-columns:repeat(6, 1fr); gap:12px; padding:0 24px 30px; }
+  .cat-tile { background:#f0f4f8; border-radius:8px; padding:24px 12px; text-align:center; cursor:pointer; transition:.2s; }
+  .cat-tile:hover { transform:translateY(-4px); box-shadow:0 8px 20px rgba(0,0,0,.08); }
+  .cat-tile.highlight { background:#fff4e6; border:2px solid var(--accent); }
+  .cat-icon { font-size:40px; margin-bottom:8px; }
+  .cat-tile h4 { font-size:13px; font-weight:600; }
+
+  .prod-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; padding:0 24px 40px; }
+  .prod-card { background:#fff; border:1px solid var(--border); border-radius:8px; overflow:hidden; cursor:pointer; transition:.2s; }
+  .prod-card:hover { transform:translateY(-3px); box-shadow:0 10px 24px rgba(0,0,0,.08); }
+  .prod-img { background:#f0f4f8; height:200px; overflow:hidden; position:relative; }
+  .prod-img img { width:100%; height:100%; object-fit:cover; display:block; }
+  .prod-info { padding:12px; }
+  .prod-info h5 { font-size:13px; margin-bottom:4px; }
+  .prod-info .price { color:var(--brand); font-weight:700; font-size:15px; }
+
+  /* PAGE 2: CATEGORY */
+  .breadcrumb { padding:14px 24px; font-size:13px; color:var(--muted); border-bottom:1px solid var(--border); }
+  .breadcrumb a { color:var(--brand); text-decoration:none; }
+  .cat-layout { display:grid; grid-template-columns:240px 1fr; gap:24px; padding:24px; }
+  .filters h3 { font-size:14px; font-weight:700; margin-bottom:10px; text-transform:uppercase; color:#333; }
+  .filter-group { border-bottom:1px solid var(--border); padding:14px 0; }
+  .filter-group label { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:13px; cursor:pointer; color:#444; }
+  .swatches { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+  .swatch { width:24px; height:24px; border-radius:50%; border:2px solid var(--border); cursor:pointer; }
+  .swatch.selected { border-color:var(--brand); box-shadow:0 0 0 2px var(--brand); }
+  .results-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .results-bar .count { font-size:14px; color:var(--muted); }
+  .results-bar select { padding:8px 12px; border:1px solid var(--border); border-radius:6px; }
+
+  /* PAGE 3: PDP */
+  .pdp { display:grid; grid-template-columns:74px 1.2fr 1fr; gap:20px; padding:30px; }
+  .thumb-strip { display:flex; flex-direction:column; gap:8px; align-items:stretch; }
+  .thumb-strip .thumb { width:64px; height:64px; background:#fff; border:2px solid var(--border); border-radius:6px; overflow:hidden; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .thumb-strip .thumb img { width:100%; height:100%; object-fit:cover; }
+  .thumb-strip .thumb.active { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent); }
+  .pdp-preview { background:#f8f9fb; border-radius:12px; height:540px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+  .pdp-preview .hero-mug { max-height:100%; max-width:100%; object-fit:contain; }
+  .pdp-preview .design-ghost { position:absolute; top:50%; left:44%; transform:translate(-50%,-50%); color:#bbb; font-family:Georgia,serif; text-align:center; pointer-events:none; letter-spacing:1px; }
+  .pdp-preview .design-ghost .big { font-size:22px; font-weight:700; color:#999; }
+  .pdp-preview .design-ghost .small { font-size:12px; color:#ccc; margin-top:4px; text-transform:uppercase; }
+
+  .pdp-info h1 { font-size:28px; margin-bottom:8px; }
+  .rating { color:var(--accent); font-size:14px; margin-bottom:12px; }
+  .price-big { font-size:32px; font-weight:800; color:var(--ink); margin-bottom:4px; }
+  .price-small { font-size:13px; color:var(--muted); margin-bottom:24px; }
+
+  .option-block { margin-bottom:20px; }
+  .option-block label { font-size:13px; font-weight:700; text-transform:uppercase; color:#333; display:block; margin-bottom:8px; }
+  .pill-group { display:flex; flex-wrap:wrap; gap:8px; }
+  .pill { padding:8px 16px; border:2px solid var(--border); border-radius:6px; background:#fff; cursor:pointer; font-size:13px; }
+  .pill.selected { border-color:var(--brand); background:#e6f0fa; color:var(--brand); font-weight:700; }
+
+  .cta-primary { background:var(--accent); color:#fff; border:0; padding:16px 32px; font-size:16px; font-weight:700; border-radius:6px; cursor:pointer; width:100%; margin-top:12px; text-decoration:none; display:inline-block; text-align:center; }
+  .cta-secondary { background:#fff; color:var(--ink); border:2px solid var(--ink); padding:14px 32px; font-size:15px; font-weight:600; border-radius:6px; cursor:pointer; width:100%; margin-top:10px; text-decoration:none; display:inline-block; text-align:center; }
+
+  /* PAGE 4: CONFIGURATOR */
+  .configurator { display:grid; grid-template-columns:1.3fr 1fr; gap:0; }
+  .cfg-canvas { background:linear-gradient(180deg,#fafbfc,#eef1f5); min-height:640px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px; position:relative; }
+  .cfg-canvas .cfg-mug-img { max-height:480px; max-width:100%; object-fit:contain; filter:drop-shadow(0 20px 30px rgba(0,0,0,.15)); }
+  .cfg-canvas .rotate-hint { position:absolute; bottom:20px; color:var(--muted); font-size:12px; }
+  .cfg-tools { position:absolute; left:20px; top:20px; display:flex; flex-direction:column; gap:6px; z-index:2; }
+  .cfg-tools .tool { width:40px; height:40px; background:#fff; border:1px solid var(--border); border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:18px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,.04); }
+  .cfg-options { padding:30px; border-left:1px solid var(--border); }
+  .cfg-options h2 { font-size:22px; margin-bottom:6px; }
+  .cfg-options .sub { color:var(--muted); font-size:13px; margin-bottom:24px; }
+
+  .opt-row { border-bottom:1px solid var(--border); padding:16px 0; }
+  .opt-row .opt-label { display:flex; justify-content:space-between; font-size:13px; font-weight:700; text-transform:uppercase; margin-bottom:10px; }
+  .opt-row .opt-label .current { color:var(--brand); text-transform:none; font-weight:600; }
+
+  /* ============ PAGE 5: ZAZZLE-STYLE DESIGNER ============ */
+  .zdesigner-topnav { display:flex; align-items:center; padding:12px 20px; border-bottom:1px solid var(--border); gap:18px; background:#fff; }
+  .zdesigner-topnav .breadcrumb-inline { flex:1; font-size:13px; color:var(--muted); }
+  .zdesigner-topnav .breadcrumb-inline a { color:var(--brand); text-decoration:none; }
+  .zdesigner-topnav .breadcrumb-inline b { color:var(--ink); }
+  .zdesigner-topnav .top-actions { display:flex; gap:14px; font-size:13px; }
+
+  .zdesigner { display:grid; grid-template-columns:72px 1fr 340px; min-height:720px; }
+
+  .zrail { background:#1a1a1a; color:#fff; padding:10px 6px; display:flex; flex-direction:column; gap:4px; }
+  .zrail-item { padding:10px 4px; text-align:center; border-radius:6px; cursor:pointer; transition:.15s; }
+  .zrail-item:hover, .zrail-item.active { background:var(--brand); }
+  .zrail-item .icon { font-size:22px; line-height:1; margin-bottom:4px; display:block; }
+  .zrail-item .label { font-size:10px; letter-spacing:.3px; text-transform:uppercase; }
+
+  .zstage { background:linear-gradient(180deg,#eef1f5,#dde3ea); display:flex; flex-direction:column; min-width:0; }
+
+  .zctx-bar { background:#fff; border-bottom:1px solid var(--border); padding:8px 16px; display:flex; align-items:center; gap:6px; font-size:13px; flex-wrap:wrap; }
+  .zctx-bar .ctx-label { color:var(--muted); font-weight:600; margin-right:4px; }
+  .zctx-bar select, .zctx-bar input { padding:5px 8px; border:1px solid var(--border); border-radius:4px; font-size:12px; }
+  .zctx-bar button { padding:5px 10px; border:1px solid var(--border); background:#fff; border-radius:4px; cursor:pointer; font-size:12px; }
+  .zctx-bar button.color-chip { background:#222; color:#fff; padding:5px 14px; }
+  .zctx-bar .ctx-sep { width:1px; height:20px; background:var(--border); margin:0 4px; }
+  .zctx-bar .undo-group { margin-left:auto; display:flex; gap:6px; }
+
+  .zmugs { flex:1; display:grid; grid-template-columns:1fr 1fr; gap:16px; padding:20px; align-items:center; }
+  .zmug-view { display:flex; flex-direction:column; align-items:center; }
+  .zmug-label { font-size:10px; font-weight:700; color:var(--muted); letter-spacing:1.5px; margin-bottom:6px; }
+  .zmug-wrap { position:relative; width:100%; display:flex; align-items:center; justify-content:center; }
+  .zmug-wrap img { max-height:340px; max-width:100%; object-fit:contain; filter:drop-shadow(0 10px 18px rgba(0,0,0,.12)); }
+  .zmug-wrap img.flip { transform:scaleX(-1); }
+  .zmug-design { position:absolute; top:50%; left:42%; transform:translate(-50%,-50%); text-align:center; font-family:Georgia, serif; pointer-events:none; }
+  .zmug-design .d-hello { font-size:16px; font-weight:800; color:#222; }
+  .zmug-design .d-monday { font-size:22px; font-weight:900; color:var(--accent); line-height:1.1; }
+  .zmug-design .d-emoji { font-size:20px; margin-top:3px; }
+  .zmug-selection { position:absolute; top:34%; left:26%; width:36%; height:34%; border:1.5px solid var(--brand); border-radius:2px; pointer-events:none; }
+  .zmug-selection::before, .zmug-selection::after { content:''; position:absolute; width:8px; height:8px; background:#fff; border:1.5px solid var(--brand); border-radius:50%; }
+  .zmug-selection::before { top:-5px; left:-5px; }
+  .zmug-selection::after { bottom:-5px; right:-5px; }
+
+  .zangles { padding:10px 20px; display:flex; gap:8px; justify-content:center; background:rgba(255,255,255,.5); border-top:1px solid var(--border); }
+  .zangle { width:52px; height:52px; background:#fff; border:2px solid var(--border); border-radius:6px; overflow:hidden; cursor:pointer; position:relative; }
+  .zangle img { width:100%; height:100%; object-fit:cover; }
+  .zangle img.flip { transform:scaleX(-1); }
+  .zangle.active { border-color:var(--brand); box-shadow:0 0 0 1px var(--brand); }
+  .zangle .angle-label { position:absolute; bottom:0; left:0; right:0; font-size:8px; background:rgba(0,0,0,.6); color:#fff; text-align:center; padding:1px 0; letter-spacing:.5px; }
+
+  .zbottom-controls { display:flex; justify-content:space-between; align-items:center; padding:10px 20px; background:#fff; border-top:1px solid var(--border); font-size:12px; }
+  .zoom-ctrl { display:flex; align-items:center; gap:6px; }
+  .zoom-ctrl button { width:28px; height:28px; border:1px solid var(--border); background:#fff; border-radius:4px; cursor:pointer; font-size:14px; }
+  .design-hint { color:var(--muted); font-style:italic; }
+
+  .zright { background:#fafafa; border-left:1px solid var(--border); overflow-y:auto; }
+  .zsection { padding:16px 18px; border-bottom:1px solid var(--border); background:#fff; }
+  .zsection-title { font-size:11px; font-weight:700; color:#666; letter-spacing:1px; text-transform:uppercase; margin-bottom:12px; }
+
+  .zopt { margin-bottom:10px; }
+  .zopt label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .zopt select { width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; background:#fff; cursor:pointer; }
+
+  .zcart { padding:16px 18px; border-bottom:1px solid var(--border); background:#fff; }
+  .zprice { display:flex; align-items:baseline; gap:6px; margin-bottom:6px; }
+  .zprice .amt { font-size:30px; font-weight:800; color:var(--ink); }
+  .zprice .each { font-size:12px; color:var(--muted); }
+  .zprice-note { font-size:11px; color:var(--ok); margin-bottom:14px; font-weight:600; }
+
+  .zqty { margin-bottom:14px; }
+  .zqty label { font-size:12px; color:var(--muted); display:block; margin-bottom:6px; }
+  .qty-picker { display:flex; align-items:center; gap:0; width:fit-content; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+  .qty-picker button { width:34px; height:34px; border:0; background:#fff; cursor:pointer; font-size:16px; font-weight:700; color:#333; }
+  .qty-picker button:hover { background:#f0f0f0; }
+  .qty-picker input { width:50px; text-align:center; border:0; border-left:1px solid var(--border); border-right:1px solid var(--border); height:34px; font-size:14px; }
+
+  .zbtn { display:block; width:100%; padding:13px; border:0; border-radius:6px; text-align:center; text-decoration:none; font-weight:700; font-size:14px; cursor:pointer; margin-top:8px; box-sizing:border-box; font-family:inherit; }
+  .zbtn.preview { background:var(--brand); color:#fff; }
+  .zbtn.preview:hover { background:var(--brand-dark); }
+  .zbtn.primary { background:var(--accent); color:#fff; }
+  .zbtn.secondary { background:#fff; color:var(--ink); border:2px solid var(--ink); padding:11px; }
+
+  .zaccordion details { border-bottom:1px solid var(--border); padding:0; background:#fff; }
+  .zaccordion details:last-child { border-bottom:0; }
+  .zaccordion summary { font-size:13px; font-weight:600; cursor:pointer; padding:14px 18px; list-style:none; display:flex; justify-content:space-between; }
+  .zaccordion summary::after { content:'▾'; color:var(--muted); }
+  .zaccordion details[open] summary::after { content:'▴'; }
+  .zaccordion details > div { padding:0 18px 14px; font-size:12px; color:var(--muted); line-height:1.6; }
+
+  /* ============ PREVIEW FINAL MODAL ============ */
+  .zmodal { display:none; }
+  .zmodal:target { display:flex; position:fixed; inset:0; z-index:1000; align-items:center; justify-content:center; padding:20px; }
+  .zmodal-backdrop { position:absolute; inset:0; background:rgba(17,17,17,.75); backdrop-filter:blur(4px); cursor:pointer; }
+  .zmodal-content { position:relative; background:#fff; border-radius:14px; max-width:1100px; width:100%; max-height:92vh; overflow-y:auto; box-shadow:0 30px 80px rgba(0,0,0,.4); }
+  .zmodal-header { display:flex; justify-content:space-between; align-items:center; padding:18px 26px; border-bottom:1px solid var(--border); position:sticky; top:0; background:#fff; z-index:2; }
+  .zmodal-header h2 { font-size:20px; }
+  .zmodal-header .sub { font-size:12px; color:var(--muted); margin-top:2px; }
+  .zmodal-close { font-size:20px; color:#666; text-decoration:none; width:36px; height:36px; display:flex; align-items:center; justify-content:center; border-radius:50%; transition:.15s; }
+  .zmodal-close:hover { background:#f0f0f0; color:#000; }
+
+  .review { display:grid; grid-template-columns:1.3fr 1fr; gap:24px; padding:24px; }
+  .review-preview { background:#f0f4f8; border-radius:12px; padding:16px; }
+  .multi-view { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .view-tile { background:#fff; border:1px solid var(--border); border-radius:8px; padding:10px; text-align:center; position:relative; overflow:hidden; }
+  .view-tile .view-img-wrap { position:relative; height:180px; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  .view-tile img { max-height:100%; max-width:100%; object-fit:contain; }
+  .view-tile img.flip { transform:scaleX(-1); }
+  .view-tile img.cover { object-fit:cover; width:100%; height:100%; }
+  .view-tile .v-design { position:absolute; top:44%; left:34%; transform:translate(-50%,-50%); text-align:center; font-family:Georgia,serif; pointer-events:none; }
+  .view-tile .v-design .v-hello { font-size:12px; font-weight:800; color:#222; display:block; }
+  .view-tile .v-design .v-monday { font-size:15px; font-weight:900; color:var(--accent); display:block; line-height:1.1; }
+  .view-tile p { font-size:11px; color:var(--muted); text-transform:uppercase; margin-top:6px; letter-spacing:.5px; font-weight:600; }
+
+  .review-summary h2 { font-size:22px; margin-bottom:4px; }
+  .review-summary .subtitle { color:var(--muted); margin-bottom:16px; font-size:13px; }
+  .summary-row { display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .summary-row .key { color:var(--muted); }
+  .total-row { font-size:18px; font-weight:800; padding:14px 0; border-top:2px solid var(--ink); margin-top:6px; display:flex; justify-content:space-between; }
+  .badge { display:inline-block; background:#dcfce7; color:var(--ok); padding:3px 10px; border-radius:4px; font-size:11px; font-weight:700; margin-bottom:10px; }
+
+  /* legend */
+  .legend { max-width:1280px; margin:0 auto 40px; padding:20px; background:#fff8e1; border-radius:8px; font-size:13px; color:#555; border-left:4px solid var(--accent); }
+  .legend b { color:#000; }
+  .legend code { background:#f0e5c0; padding:1px 5px; border-radius:3px; font-size:12px; }
+</style>
+</head>
+<body>
+
+<nav class="flow-nav">
+  <a href="#page1">① Landing</a>
+  <a href="#page2">② Mugs Category</a>
+  <a href="#page3">③ Create Your Own</a>
+  <a href="#page4">④ Designer (Design)</a>
+  <a href="#page5">⑤ Review</a>
+</nav>
+
+<div class="legend">
+  <b>UI Flow Mockup — Zazzle-exact match</b> — 5 pages. Page ④ = Design tab (Zazzle canvas layout). Page ⑤ = Review tab with vertical thumbnail strip on left. Real mug photos from <code>/images/</code>.
+</div>
+
+<!-- ============ PAGE 1: LANDING ============ -->
+<section class="page" id="page1">
+  <div class="page-label"><span>① Landing Page</span><span class="step">/ (home)</span></div>
+
+  <div class="topbar">
+    <div class="logo">mugly</div>
+    <div class="search">
+      <input placeholder="Search mugs, designs, themes…">
+      <button>Search</button>
+    </div>
+    <div class="top-actions">
+      <span>Favorites</span><span>Sign in</span><span>Cart (0)</span>
+    </div>
+  </div>
+  <div class="nav-cats">
+    <a href="#" class="active">Home</a><a href="#">All Mugs</a><a href="#">Custom Designs</a>
+    <a href="#">Collections</a><a href="#">Occasions</a><a href="#">Sale</a>
+  </div>
+
+  <div class="hero">
+    <h1>Design a Mug That's Truly Yours</h1>
+    <p>Upload photos, add text, pick a style — we print, we ship.</p>
+    <button>Start Designing →</button>
+  </div>
+
+  <h2 class="section-title">Shop by Category</h2>
+  <div class="cat-grid">
+    <div class="cat-tile highlight"><div class="cat-icon">☕</div><h4>Mugs</h4></div>
+    <div class="cat-tile"><div class="cat-icon">👕</div><h4>Apparel</h4></div>
+    <div class="cat-tile"><div class="cat-icon">📱</div><h4>Phone Cases</h4></div>
+    <div class="cat-tile"><div class="cat-icon">💌</div><h4>Invitations</h4></div>
+    <div class="cat-tile"><div class="cat-icon">🎁</div><h4>Gifts</h4></div>
+    <div class="cat-tile"><div class="cat-icon">🖼️</div><h4>Wall Art</h4></div>
+  </div>
+
+  <h2 class="section-title">Popular Mug Designs</h2>
+  <div class="prod-grid">
+    <div class="prod-card">
+      <div class="prod-img"><img src="../images/still-life-frame-mug.jpg" alt="Best Dad Mug"></div>
+      <div class="prod-info"><h5>Best Dad Ever Mug</h5><div class="price">$18.95</div></div>
+    </div>
+    <div class="prod-card">
+      <div class="prod-img"><img src="../images/elephant-mug-sips-hot-coffee-wooden-table-generated-by-ai.jpg" alt="Monday Fuel Mug"></div>
+      <div class="prod-info"><h5>Monday Fuel Mug</h5><div class="price">$16.50</div></div>
+    </div>
+    <div class="prod-card">
+      <div class="prod-img"><img src="../images/still-life-frame-mug%20%281%29.jpg" alt="Boss Life Mug"></div>
+      <div class="prod-info"><h5>Boss Life Mug</h5><div class="price">$19.00</div></div>
+    </div>
+    <div class="prod-card">
+      <div class="prod-img"><img src="../images/black%20white%20cup.jpg" alt="Create Your Own"></div>
+      <div class="prod-info"><h5>Create Your Own</h5><div class="price">From $14.95</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PAGE 2: MUGS CATEGORY ============ -->
+<section class="page" id="page2">
+  <div class="page-label"><span>② Mugs Category</span><span class="step">/c/mugs</span></div>
+
+  <div class="topbar">
+    <div class="logo">mugly</div>
+    <div class="search"><input placeholder="Search mugs…"><button>Search</button></div>
+    <div class="top-actions"><span>Favorites</span><span>Sign in</span><span>Cart (0)</span></div>
+  </div>
+  <div class="breadcrumb"><a href="#">Home</a> › <a href="#">Drinkware</a> › <b>Mugs</b></div>
+
+  <div class="cat-layout">
+    <aside class="filters">
+      <h3>Filters</h3>
+      <div class="filter-group">
+        <h3 style="font-size:12px;">Style</h3>
+        <label><input type="checkbox" checked> Combo Mug (Ceramic)</label>
+        <label><input type="checkbox"> Travel Mug</label>
+        <label><input type="checkbox"> Espresso Mug</label>
+        <label><input type="checkbox"> Two-Tone Mug</label>
+        <label><input type="checkbox"> Color-Changing</label>
+      </div>
+      <div class="filter-group">
+        <h3 style="font-size:12px;">Size</h3>
+        <label><input type="checkbox"> 11 oz</label>
+        <label><input type="checkbox"> 15 oz</label>
+        <label><input type="checkbox"> 20 oz</label>
+      </div>
+      <div class="filter-group">
+        <h3 style="font-size:12px;">Color</h3>
+        <div class="swatches">
+          <div class="swatch selected" style="background:#fff;"></div>
+          <div class="swatch" style="background:#111;"></div>
+          <div class="swatch" style="background:#dc2626;"></div>
+          <div class="swatch" style="background:#2563eb;"></div>
+          <div class="swatch" style="background:#16a34a;"></div>
+          <div class="swatch" style="background:#f59e0b;"></div>
+        </div>
+      </div>
+      <div class="filter-group">
+        <h3 style="font-size:12px;">Price</h3>
+        <label><input type="checkbox"> Under $15</label>
+        <label><input type="checkbox"> $15 – $25</label>
+        <label><input type="checkbox"> $25+</label>
+      </div>
+    </aside>
+
+    <div>
+      <div class="results-bar">
+        <div class="count">2,148 mugs</div>
+        <select><option>Sort: Bestselling</option><option>Price: Low to High</option><option>Newest</option></select>
+      </div>
+      <div class="prod-grid" style="padding:0;">
+        <div class="prod-card"><div class="prod-img"><img src="../images/black%20white%20cup.jpg" alt="Classic"></div><div class="prod-info"><h5>Classic White/Black 11oz</h5><div class="price">$14.95</div></div></div>
+        <div class="prod-card"><div class="prod-img"><img src="../images/still-life-frame-mug.jpg" alt="Still Life"></div><div class="prod-info"><h5>Matte Ceramic 15oz</h5><div class="price">$18.50</div></div></div>
+        <div class="prod-card"><div class="prod-img"><img src="../images/Image%201.jpg" alt="Designer"></div><div class="prod-info"><h5>Designer Series 11oz</h5><div class="price">$15.95</div></div></div>
+        <div class="prod-card"><div class="prod-img"><img src="../images/two-beautiful-cups-gray-surface.jpg" alt="Pair"></div><div class="prod-info"><h5>Couple Pair Set</h5><div class="price">$29.95</div></div></div>
+        <div class="prod-card"><div class="prod-img"><img src="../images/still-life-frame-mug%20%281%29.jpg" alt="Premium"></div><div class="prod-info"><h5>Premium Ceramic 15oz</h5><div class="price">$19.95</div></div></div>
+        <div class="prod-card"><div class="prod-img"><img src="../images/elephant-mug-sips-hot-coffee-wooden-table-generated-by-ai.jpg" alt="Lifestyle"></div><div class="prod-info"><h5>Quirky Character Mug</h5><div class="price">$24.95</div></div></div>
+        <div class="prod-card"><div class="prod-img"><img src="../images/black%20white%20cup.jpg" alt="Combo"></div><div class="prod-info"><h5>Combo Two-Tone 11oz</h5><div class="price">$16.95</div></div></div>
+        <div class="prod-card" style="border:2px solid var(--accent);">
+          <div class="prod-img" style="background:#fff4e6; display:flex; align-items:center; justify-content:center; position:relative;">
+            <img src="../images/black%20white%20cup.jpg" alt="Create" style="opacity:.55;">
+            <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; color:var(--accent); font-weight:700;">
+              <div style="font-size:36px; line-height:1;">＋</div>
+              <div style="font-size:12px; margin-top:6px; text-transform:uppercase; letter-spacing:1px;">Start Blank</div>
+            </div>
+          </div>
+          <div class="prod-info"><h5 style="color:var(--accent);">Create Your Own</h5><div class="price">From $14.95</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PAGE 3: CREATE YOUR OWN ============ -->
+<section class="page" id="page3">
+  <div class="page-label"><span>③ Create Your Own — Product Page</span><span class="step">/c/mugs/create</span></div>
+
+  <div class="topbar">
+    <div class="logo">mugly</div>
+    <div class="search"><input placeholder="Search…"><button>Search</button></div>
+    <div class="top-actions"><span>Favorites</span><span>Sign in</span><span>Cart (0)</span></div>
+  </div>
+  <div class="breadcrumb"><a href="#">Home</a> › <a href="#">Mugs</a> › <b>Create Your Own</b></div>
+
+  <div class="pdp">
+    <div class="thumb-strip">
+      <div class="thumb active"><img src="../images/black%20white%20cup.jpg" alt=""></div>
+      <div class="thumb"><img src="../images/still-life-frame-mug.jpg" alt=""></div>
+      <div class="thumb"><img src="../images/still-life-frame-mug%20%281%29.jpg" alt=""></div>
+      <div class="thumb"><img src="../images/two-beautiful-cups-gray-surface.jpg" alt=""></div>
+      <div class="thumb"><img src="../images/elephant-mug-sips-hot-coffee-wooden-table-generated-by-ai.jpg" alt=""></div>
+      <div class="thumb"><img src="../images/Image%201.jpg" alt=""></div>
+    </div>
+    <div class="pdp-preview">
+      <img src="../images/black%20white%20cup.jpg" alt="Blank combo mug" class="hero-mug">
+      <div class="design-ghost">
+        <div class="big">Your Design</div>
+        <div class="small">Appears Here</div>
+      </div>
+    </div>
+
+    <div class="pdp-info">
+      <h1>Custom Photo Mug</h1>
+      <div class="rating">★★★★★ (12,483 reviews)</div>
+      <div class="price-big">$18.95</div>
+      <div class="price-small">Free shipping on orders over $35</div>
+
+      <div class="option-block">
+        <label>Style</label>
+        <div class="pill-group">
+          <div class="pill selected">Combo Mug</div>
+          <div class="pill">Travel Mug</div>
+          <div class="pill">Espresso</div>
+          <div class="pill">Two-Tone</div>
+        </div>
+      </div>
+
+      <div class="option-block">
+        <label>Size</label>
+        <div class="pill-group">
+          <div class="pill selected">11 oz</div>
+          <div class="pill">15 oz</div>
+          <div class="pill">20 oz</div>
+        </div>
+      </div>
+
+      <div class="option-block">
+        <label>Color — Black/White</label>
+        <div class="swatches">
+          <div class="swatch selected" style="background:linear-gradient(90deg,#fff 50%,#111 50%);"></div>
+          <div class="swatch" style="background:#fff;"></div>
+          <div class="swatch" style="background:#111;"></div>
+          <div class="swatch" style="background:#dc2626;"></div>
+          <div class="swatch" style="background:#2563eb;"></div>
+          <div class="swatch" style="background:#16a34a;"></div>
+        </div>
+      </div>
+
+      <a href="#page4" class="cta-primary">Personalize This Mug →</a>
+      <button class="cta-secondary">Choose a Template Instead</button>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============ PAGE 4: DESIGNER (Zazzle Design Tab) ============ -->
+<section class="page" id="page4">
+  <div class="page-label"><span>④ Designer — Design Tab</span><span class="step">/design</span></div>
+
+  <div style="display:flex; align-items:center; padding:12px 20px; border-bottom:1px solid #e5e7eb; background:#fff; gap:20px; font-size:14px;">
+    <a href="#page3" style="color:#333; text-decoration:none; display:flex; align-items:center; gap:6px; font-weight:500;">✕ Save and Exit</a>
+    <span style="font-weight:600;">Mug</span>
+    <span style="color:#16a34a; font-size:12px; display:flex; align-items:center; gap:4px;">● Saved</span>
+    <div style="display:flex; gap:30px; flex:1; justify-content:center;">
+      <span style="font-weight:700; color:#000; border-bottom:2px solid #000; padding:8px 4px;">Design</span>
+      <a href="#page5" style="color:#666; text-decoration:none; padding:8px 4px; font-weight:600;">Review</a>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button style="width:34px; height:34px; border:1px solid #e5e7eb; border-radius:50%; background:#fff; cursor:pointer; color:#999;">↶</button>
+      <button style="width:34px; height:34px; border:1px solid #e5e7eb; border-radius:50%; background:#fff; cursor:pointer; color:#999;">↷</button>
+    </div>
+    <span style="display:flex; gap:6px; align-items:center; color:#333; cursor:pointer;">👁 Preview</span>
+    <a href="#page5" style="background:#1e2a78; color:#fff; padding:10px 22px; border-radius:22px; text-decoration:none; font-weight:700; font-size:13px;">Next: Review →</a>
+  </div>
+
+  <div style="background:#eff1f5; min-height:620px; position:relative; padding:30px;">
+    <div style="position:absolute; left:30px; top:30px; background:#fff; border-radius:10px; padding:12px 10px; width:80px; box-shadow:0 2px 10px rgba(0,0,0,.06); z-index:3;">
+      <div style="text-align:center; padding:10px 4px; border-radius:8px; background:#d9e5fc;">
+        <div style="font-size:22px; font-weight:300;">T</div>
+        <div style="font-size:11px; margin-top:4px; font-weight:600;">Add Text</div>
+      </div>
+      <div style="text-align:center; padding:10px 4px; margin-top:8px; cursor:pointer;">
+        <div style="font-size:22px;">☁</div>
+        <div style="font-size:11px; margin-top:4px;">Uploads</div>
+      </div>
+      <div style="text-align:center; padding:10px 4px; margin-top:8px; cursor:pointer;">
+        <div style="font-size:22px;">🖼</div>
+      </div>
+      <div style="text-align:center; padding:6px; color:#999; margin-top:4px;">▼</div>
+    </div>
+
+    <div style="position:absolute; left:132px; top:30px; background:#fff; border-radius:10px; padding:22px; width:380px; box-shadow:0 2px 10px rgba(0,0,0,.06); z-index:2;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+        <h3 style="font-size:18px; font-weight:700;">Add text to your design</h3>
+        <span style="cursor:pointer; color:#666; font-size:16px;">✕</span>
+      </div>
+      <p style="color:#6b7280; font-size:13px; margin-bottom:20px;">Click the button below to add text to your design</p>
+      <button style="background:#1e2a78; color:#fff; border:0; padding:14px; border-radius:28px; width:100%; font-weight:600; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;"><span style="font-size:16px;">T</span> Add a text box</button>
+    </div>
+
+    <div style="display:flex; align-items:center; justify-content:center; height:500px; padding-top:40px;">
+      <div style="position:relative;">
+        <img src="../images/black%20white%20cup.jpg" style="max-height:320px; transform:scaleX(-1); filter:drop-shadow(0 14px 24px rgba(0,0,0,.12));" alt="Mug">
+        <div style="position:absolute; top:22%; left:28%; width:170%; height:58%; border:1.8px dashed #4caf50; background:rgba(76,175,80,.03); pointer-events:none;">
+          <div style="position:absolute; left:25%; top:0; bottom:0; border-left:1.5px dashed #4caf50; opacity:.65;"></div>
+          <div style="position:absolute; left:50%; top:0; bottom:0; border-left:1.5px dashed #4caf50; opacity:.65;"></div>
+          <div style="position:absolute; left:75%; top:0; bottom:0; border-left:1.5px dashed #4caf50; opacity:.65;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="position:absolute; right:30px; top:30px; background:#fff; border:2px solid #1e2a78; border-radius:8px; padding:10px; width:160px; text-align:center; z-index:2;">
+      <img src="../images/black%20white%20cup.jpg" style="width:100%; height:110px; object-fit:contain;" alt="">
+      <div style="font-size:12px; color:#333; margin-top:6px; font-weight:600;">Text &amp; Images</div>
+    </div>
+
+    <div style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:10px;">
+      <button style="width:40px; height:40px; border:0; border-radius:50%; background:#fff; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.08); font-size:18px;">−</button>
+      <div style="background:#fff; border-radius:22px; padding:10px 16px; box-shadow:0 2px 6px rgba(0,0,0,.08); font-size:14px; font-weight:600;">100% ▼</div>
+      <button style="width:40px; height:40px; border:0; border-radius:50%; background:#fff; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.08); font-size:18px;">+</button>
+      <button style="width:40px; height:40px; border:0; border-radius:50%; background:#fff; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.08); font-size:16px;">⚙</button>
+      <button style="width:40px; height:40px; border:0; border-radius:50%; background:#fff; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.08); font-size:16px;">?</button>
+      <button style="width:40px; height:40px; border:0; border-radius:50%; background:#fff; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.08); font-size:16px;">⤴</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PAGE 5: REVIEW (Zazzle Review Tab) ============ -->
+<section class="page" id="page5">
+  <div class="page-label"><span>⑤ Review Tab</span><span class="step">/review</span></div>
+
+  <div style="display:flex; align-items:center; padding:12px 20px; border-bottom:1px solid #e5e7eb; background:#fff; gap:20px; font-size:14px;">
+    <a href="#page3" style="color:#333; text-decoration:none; font-weight:500;">✕ Save and Exit</a>
+    <span style="font-weight:600;">Mug</span>
+    <span style="color:#16a34a; font-size:12px;">● Saved</span>
+    <div style="display:flex; gap:30px; flex:1; justify-content:center;">
+      <a href="#page4" style="color:#666; text-decoration:none; padding:8px 4px; font-weight:600;">Design</a>
+      <span style="font-weight:700; color:#000; border-bottom:2px solid #000; padding:8px 4px;">Review</span>
+    </div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:100px 1.4fr 1fr; gap:24px; padding:30px; background:#f8f9fb;">
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div style="width:84px; height:84px; border:2px solid #0066cc; border-radius:6px; overflow:hidden; position:relative; background:#fff; box-shadow:0 0 0 1px #0066cc;">
+        <img src="../images/black%20white%20cup.jpg" style="width:100%; height:100%; object-fit:contain;" alt="">
+        <div style="position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,.55); color:#fff; font-size:10px; text-align:center; padding:2px; font-weight:600;">Left</div>
+      </div>
+      <div style="width:84px; height:84px; border:2px solid #e5e7eb; border-radius:6px; overflow:hidden; background:#fff; cursor:pointer;">
+        <img src="../images/black%20white%20cup.jpg" style="width:100%; height:100%; object-fit:contain; transform:scaleX(-1);" alt="">
+      </div>
+      <div style="width:84px; height:84px; border:2px solid #e5e7eb; border-radius:6px; overflow:hidden; background:#fff; cursor:pointer;">
+        <img src="../images/still-life-frame-mug.jpg" style="width:100%; height:100%; object-fit:cover;" alt="">
+      </div>
+      <div style="width:84px; height:84px; border:2px solid #e5e7eb; border-radius:6px; overflow:hidden; background:#fff; cursor:pointer;">
+        <img src="../images/still-life-frame-mug%20%281%29.jpg" style="width:100%; height:100%; object-fit:cover;" alt="">
+      </div>
+      <div style="width:84px; height:84px; border:2px solid #e5e7eb; border-radius:6px; overflow:hidden; background:#fff; cursor:pointer;">
+        <img src="../images/two-beautiful-cups-gray-surface.jpg" style="width:100%; height:100%; object-fit:cover;" alt="">
+      </div>
+      <div style="width:84px; height:84px; border:2px solid #e5e7eb; border-radius:6px; overflow:hidden; background:#fff; cursor:pointer;">
+        <img src="../images/elephant-mug-sips-hot-coffee-wooden-table-generated-by-ai.jpg" style="width:100%; height:100%; object-fit:cover;" alt="">
+      </div>
+      <div style="width:32px; height:32px; border:1px solid #e5e7eb; border-radius:50%; background:#fff; margin:4px auto 0; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:12px;">↓</div>
+    </div>
+
+    <div style="background:#fff; border-radius:12px; display:flex; align-items:center; justify-content:center; min-height:520px; overflow:hidden;">
+      <img src="../images/black%20white%20cup.jpg" style="max-width:82%; max-height:460px; object-fit:contain;" alt="Selected view">
+    </div>
+
+    <div style="padding:10px 4px;">
+      <div style="display:flex; align-items:center; gap:8px; font-weight:700; font-size:15px;">
+        <span style="font-size:18px;">🏷</span>
+        <span>Your selected options:</span>
+      </div>
+      <ul style="list-style:none; padding:0; margin:14px 0 14px 6px;">
+        <li style="padding:5px 0; font-size:14px;">• Style: Combo Mug</li>
+        <li style="padding:5px 0; font-size:14px;">• Size: 11 oz</li>
+        <li style="padding:5px 0; font-size:14px;">• Color: Black</li>
+        <li style="padding:5px 0; font-size:14px;">• Turn Your Mug into a Sweet Gift: None</li>
+      </ul>
+      <div style="margin:16px 0; font-size:13px;">Save your work! <a href="#" style="color:#0066cc; text-decoration:underline;">Click to sign in to Zazzle</a></div>
+
+      <div style="display:flex; gap:10px; padding:14px 0; border-top:1px solid #e5e7eb; border-bottom:1px solid #e5e7eb; font-size:13px; align-items:flex-start;">
+        <span style="font-size:18px;">🚚</span>
+        <div>
+          <div>Order today with expedited shipping and get it by <a href="#" style="color:#0066cc; text-decoration:underline;">Apr 24</a>.</div>
+          <div style="color:#6b7280; margin-top:4px; font-size:12px;">Get it by Apr 30 with standard</div>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:flex-end; margin:18px 0 6px;">
+        <span style="font-weight:600; font-size:15px;">Subtotal:</span>
+        <div style="text-align:right;">
+          <div><span style="font-size:24px; font-weight:800;">$15.05</span> <span style="text-decoration:line-through; color:#6b7280; font-size:14px; margin-left:4px;">$17.70</span></div>
+          <div style="font-size:11px; color:#6b7280;">per mug · Comp. value</div>
+          <div style="color:#d32f2f; font-size:12px; font-weight:600; margin-top:4px;">You save 15% (MOTHERSDAY30)</div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:12px; align-items:center; margin-top:16px;">
+        <div style="border:1px solid #e5e7eb; border-radius:22px; padding:9px 16px; display:flex; align-items:center; gap:8px; font-size:14px; background:#fff;">
+          Qty: <b>1</b> <span style="color:#999;">▼</span>
+        </div>
+        <button style="flex:1; background:#fbbf24; color:#000; border:0; padding:13px; border-radius:24px; font-weight:700; font-size:14px; cursor:pointer;">Add to Cart</button>
+      </div>
+
+      <div style="text-align:center; color:#6b7280; font-size:12px; margin-top:14px;">100% Satisfaction Guaranteed</div>
+    </div>
+  </div>
+</section>
+
+<div class="legend">
+  <b>✓ Flow complete.</b> 5 pages. Page ④ matches Zazzle's Design tab (tool rail + text panel + mug with green dashed print wrap + mini preview card). Page ⑤ matches Review tab (left vertical thumbs + main mug + options/price/Add-to-Cart). Click <b>"Next: Review"</b> in Page ④ to jump to Page ⑤.
+</div>
+
+</body>
+</html>

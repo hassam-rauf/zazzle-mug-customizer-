@@ -1,0 +1,24 @@
+# WordPress / Plugin
+vendor/
+*.log
+*.cache
+
+# PHP
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+
+# IDE
+.vscode/
+.idea/
+
+# Uploads (generated at runtime — not in repo)
+wp-content/uploads/mug-designs/
+wp-content/uploads/mug-mockups/
+
+# Secrets
+.env
+.env.local

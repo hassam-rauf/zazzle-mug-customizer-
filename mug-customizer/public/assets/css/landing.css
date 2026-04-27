@@ -1,0 +1,224 @@
+/* Mug Customizer — Landing & Category page styles */
+
+/* Hide WordPress theme's page title on our custom pages */
+.mug-landing-page ~ .entry-title,
+.mug-category-page ~ .entry-title,
+body:has(.mug-landing-page) .entry-title,
+body:has(.mug-category-page) .entry-title,
+body:has(.mug-landing-page) h1.page-title,
+body:has(.mug-category-page) h1.page-title {
+  display: none !important;
+}
+.mug-landing-page,
+.mug-category-page {
+  margin-top: -2em;
+}
+:root {
+  --brand: #0066cc; --brand-dark: #004a99; --accent: #ff6a00;
+  --bg: #f5f6f8; --card: #fff; --ink: #1a1a1a; --muted: #6b7280;
+  --border: #e5e7eb; --ok: #16a34a;
+}
+
+/* ── Shared Top Bar ──────────────────────────────────────────────────────── */
+.mug-topbar {
+  display: flex; align-items: center; padding: 14px 24px;
+  border-bottom: 1px solid var(--border); gap: 18px; background: var(--card);
+}
+.mug-logo { font-size: 26px; font-weight: 900; color: var(--brand); letter-spacing: -.5px; }
+.mug-search { flex: 1; display: flex; border: 2px solid var(--brand); border-radius: 6px; overflow: hidden; max-width: 600px; }
+.mug-search input[type="text"] { flex: 1; border: 0; padding: 10px 14px; outline: none; font-size: 14px; }
+.mug-search button { background: var(--brand); color: #fff; border: 0; padding: 0 20px; font-weight: 600; cursor: pointer; }
+.mug-top-actions { display: flex; gap: 16px; font-size: 13px; }
+.mug-top-actions a { color: var(--ink); text-decoration: none; }
+.mug-top-actions a:hover { color: var(--brand); }
+
+/* ── Nav ─────────────────────────────────────────────────────────────────── */
+.mug-nav-cats {
+  display: flex; gap: 24px; padding: 10px 24px;
+  border-bottom: 1px solid var(--border); font-size: 14px; overflow-x: auto;
+}
+.mug-nav-cats a { color: #333; text-decoration: none; white-space: nowrap; }
+.mug-nav-cats a.active { color: var(--brand); font-weight: 700; }
+.mug-nav-cats a:hover { color: var(--brand); }
+
+/* ── Hero ────────────────────────────────────────────────────────────────── */
+.mug-hero {
+  height: 360px;
+  background: linear-gradient(135deg, #1e3a8a, #0066cc, #06b6d4);
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  flex-direction: column; text-align: center; padding: 20px;
+}
+.mug-hero h1 { font-size: 44px; font-weight: 800; margin-bottom: 10px; line-height: 1.2; }
+.mug-hero p { font-size: 18px; opacity: .95; margin-bottom: 20px; }
+.mug-hero-btn {
+  background: var(--accent); color: #fff; border: 0;
+  padding: 14px 32px; font-size: 16px; font-weight: 700;
+  border-radius: 6px; cursor: pointer; text-decoration: none; display: inline-block;
+}
+.mug-hero-btn:hover { background: #e05a00; color: #fff; }
+
+/* ── Section Title ───────────────────────────────────────────────────────── */
+.mug-section-title { font-size: 22px; font-weight: 700; padding: 30px 24px 16px; }
+
+/* ── Category Grid ───────────────────────────────────────────────────────── */
+.mug-cat-grid {
+  display: grid; grid-template-columns: repeat(6, 1fr);
+  gap: 12px; padding: 0 24px 30px;
+}
+.mug-cat-tile {
+  background: #f0f4f8; border-radius: 8px; padding: 24px 12px;
+  text-align: center; cursor: pointer; transition: .2s;
+  text-decoration: none; color: var(--ink); display: block;
+}
+.mug-cat-tile:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,.08); }
+.mug-cat-tile.highlight { background: #fff4e6; border: 2px solid var(--accent); }
+.mug-cat-icon { font-size: 40px; margin-bottom: 8px; }
+.mug-cat-tile h4 { font-size: 13px; font-weight: 600; margin: 0; }
+
+/* ── Product Grid ────────────────────────────────────────────────────────── */
+.mug-prod-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 16px; padding: 0 24px 40px;
+}
+.mug-prod-card {
+  background: #fff; border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; cursor: pointer; transition: .2s; text-decoration: none; color: var(--ink);
+  display: block;
+}
+.mug-prod-card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,.08); }
+.mug-prod-img { background: #f0f4f8; height: 200px; overflow: hidden; position: relative; }
+.mug-prod-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mug-prod-info { padding: 12px; }
+.mug-prod-info h5 { font-size: 13px; margin: 0 0 4px; }
+.mug-prod-price { color: var(--brand); font-weight: 700; font-size: 15px; }
+.mug-prod-price .woocommerce-Price-amount { color: var(--brand); }
+
+/* ── Create Your Own card ────────────────────────────────────────────────── */
+.mug-cyo-card { border: 2px solid var(--accent) !important; }
+.mug-cyo-img {
+  background: #fff4e6 !important;
+  display: flex !important; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+.mug-cyo-plus { font-size: 40px; color: var(--accent); line-height: 1; }
+.mug-cyo-label { font-size: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; margin-top: 6px; font-weight: 700; }
+.mug-cyo-title { color: var(--accent) !important; }
+
+/* ── Breadcrumb ──────────────────────────────────────────────────────────── */
+.mug-breadcrumb {
+  padding: 14px 24px; font-size: 13px; color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.mug-breadcrumb a { color: var(--brand); text-decoration: none; }
+.mug-breadcrumb a:hover { text-decoration: underline; }
+
+/* ── Category Layout ─────────────────────────────────────────────────────── */
+.mug-cat-layout {
+  display: grid; grid-template-columns: 240px 1fr;
+  gap: 24px; padding: 24px;
+}
+
+/* ── Filters ─────────────────────────────────────────────────────────────── */
+.mug-filters h3 { font-size: 14px; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; color: #333; }
+.mug-filter-group { border-bottom: 1px solid var(--border); padding: 14px 0; }
+.mug-filter-group h4 { font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; color: #444; }
+.mug-filter-group label {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0; font-size: 13px; cursor: pointer; color: #444;
+}
+.mug-filter-group input[type="checkbox"],
+.mug-filter-group input[type="radio"] { cursor: pointer; }
+
+.mug-filter-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.mug-filter-swatch {
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 2px solid var(--border); cursor: pointer; transition: transform .1s;
+}
+.mug-filter-swatch:hover { transform: scale(1.15); }
+.mug-filter-swatch.selected { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
+
+.mug-filter-apply {
+  display: block; width: 100%; margin-top: 14px;
+  padding: 10px; background: var(--brand); color: #fff;
+  border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;
+}
+.mug-filter-apply:hover { background: var(--brand-dark); }
+.mug-filter-clear {
+  display: block; text-align: center; margin-top: 8px;
+  color: var(--muted); font-size: 12px; text-decoration: none;
+}
+.mug-filter-clear:hover { color: var(--ink); }
+
+/* ── Results bar ─────────────────────────────────────────────────────────── */
+.mug-results-bar {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
+}
+.mug-results-count { font-size: 14px; color: var(--muted); }
+.mug-sort-form select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; cursor: pointer; }
+
+/* ── Category page overrides ─────────────────────────────────────────────── */
+.mug-category-page .mug-prod-grid {
+  grid-template-columns: repeat(2, 1fr);
+  padding: 0 0 24px;
+}
+.mug-cat-layout {
+  grid-template-columns: 200px 1fr;
+}
+
+/* ── Card text overflow fix ──────────────────────────────────────────────── */
+.mug-prod-info h5 {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+.mug-prod-card {
+  min-width: 0;
+}
+.mug-prod-img {
+  background: #f0f4f8;
+  height: 180px;
+}
+.mug-cyo-img {
+  height: 180px;
+}
+
+/* ── Placeholder image styling ───────────────────────────────────────────── */
+.mug-prod-img img[src*="placeholder"] {
+  object-fit: contain;
+  padding: 20px;
+  opacity: 0.5;
+}
+
+/* ── Filters polish ──────────────────────────────────────────────────────── */
+.mug-filters {
+  background: #fafafa;
+  border-right: 1px solid var(--border);
+  padding: 16px;
+  border-radius: 8px;
+}
+.mug-filter-group label {
+  color: #333;
+}
+
+/* ── Results bar polish ──────────────────────────────────────────────────── */
+.mug-results-count {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .mug-cat-grid { grid-template-columns: repeat(3, 1fr); }
+  .mug-prod-grid { grid-template-columns: repeat(2, 1fr); padding: 0 16px 24px; }
+  .mug-category-page .mug-prod-grid { grid-template-columns: repeat(2, 1fr); }
+  .mug-cat-layout { grid-template-columns: 1fr; }
+  .mug-hero h1 { font-size: 28px; }
+  .mug-topbar { flex-wrap: wrap; }
+  .mug-search { max-width: 100%; }
+}

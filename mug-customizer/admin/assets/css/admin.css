@@ -1,0 +1,278 @@
+/* Mug Customizer — Admin styles */
+
+/* ── Product Meta Box ────────────────────────────────────────────────────── */
+#mug-customizer-meta-box h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 16px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid #ddd;
+}
+
+#mug-customizer-meta-box h3:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* ── Mockup Grid ─────────────────────────────────────────────────────────── */
+.mug-mockup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.mug-mockup-item {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 10px;
+  background: #fafafa;
+}
+
+.mug-mockup-item .mockup-key {
+  font-size: 11px;
+  color: #666;
+  font-family: monospace;
+  margin-bottom: 6px;
+  word-break: break-all;
+}
+
+.mug-mockup-item .mockup-preview {
+  width: 100%;
+  height: 100px;
+  object-fit: contain;
+  background: #f0f0f0;
+  border-radius: 4px;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.mug-mockup-item .mockup-url {
+  font-size: 11px;
+  color: #444;
+  word-break: break-all;
+  margin-bottom: 6px;
+}
+
+.mug-mockup-item .btn-upload-mockup {
+  width: 100%;
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.mug-mockup-placeholder {
+  width: 100%;
+  height: 100px;
+  background: #f0f0f0;
+  border: 2px dashed #ccc;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+/* ── Print Area Table ────────────────────────────────────────────────────── */
+.mug-print-area-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.mug-print-area-table th {
+  background: #f0f0f0;
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: 600;
+  border: 1px solid #ddd;
+}
+
+.mug-print-area-table td {
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  vertical-align: middle;
+}
+
+.mug-print-area-table input[type="number"] {
+  width: 70px;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.mug-print-area-table .unit {
+  font-size: 11px;
+  color: #888;
+  margin-left: 3px;
+}
+
+/* ── Addon Prices Table ──────────────────────────────────────────────────── */
+.mug-addon-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.mug-addon-table th {
+  background: #f0f0f0;
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: 600;
+  border: 1px solid #ddd;
+}
+
+.mug-addon-table td {
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  vertical-align: middle;
+}
+
+.mug-addon-table input[type="number"] {
+  width: 90px;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.mug-addon-table .currency-prefix {
+  font-size: 13px;
+  font-weight: 600;
+  margin-right: 2px;
+}
+
+/* ── Admin Page: Products List ───────────────────────────────────────────── */
+.mug-admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.mug-admin-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.mug-products-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 13px;
+}
+
+.mug-products-table th {
+  background: #f0f0f0;
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid #ddd;
+}
+
+.mug-products-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+  vertical-align: middle;
+}
+
+.mug-products-table tr:hover td {
+  background: #fafafa;
+}
+
+.mug-products-table .mug-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+.mug-products-table .mug-completeness {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.mug-products-table .mug-completeness.complete {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.mug-products-table .mug-completeness.partial {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.mug-products-table .mug-completeness.missing {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* ── Order Meta Display ──────────────────────────────────────────────────── */
+.mug-design-col {
+  min-width: 180px;
+}
+
+.mug-design-meta {
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.mug-design-meta strong {
+  color: #1a1a1a;
+}
+
+.mug-design-meta .mug-design-preview {
+  display: block;
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-top: 6px;
+}
+
+.mug-download-print {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 4px 8px;
+  background: #2271b1;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.mug-download-print:hover {
+  background: #135e96;
+  color: #fff;
+}
+
+/* ── Notices ─────────────────────────────────────────────────────────────── */
+.mug-admin-notice {
+  margin: 10px 0;
+  padding: 10px 14px;
+  border-left: 4px solid #2271b1;
+  background: #f0f6fc;
+  font-size: 13px;
+  border-radius: 2px;
+}
+
+.mug-admin-notice.success {
+  border-color: #00a32a;
+  background: #f0fff4;
+}
+
+.mug-admin-notice.error {
+  border-color: #d63638;
+  background: #fff0f0;
+}
