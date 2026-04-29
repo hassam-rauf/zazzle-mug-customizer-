@@ -12,6 +12,12 @@
   let historyIndex  = -1;
   let isHistoryLock = false;
 
+  // Mug background metadata (native PNG dims drive print-area math)
+  let _mugImg          = null;
+  let _mugNaturalW     = 2000;
+  let _mugNaturalH     = 2000;
+  let _warpRafPending  = false;
+
   // P3 — canvas pan state
   let _spaceDown = false;
   let _isPanning = false;
@@ -24,6 +30,35 @@
     color: cfg.color || 'black',
   };
   let selectedAddons = [];
+
+  // Hex per color name — drives the multiply tint on the white mug PNG so we
+  // get infinite colors from a single asset. 'black' is intentionally #2a2a2a
+  // rather than pure black so subtle ceramic shading isn't crushed to flat.
+  var COLOR_HEX_MAP = {
+    black:  '#2a2a2a',
+    white:  '#ffffff',
+    red:    '#dc2626',
+    blue:   '#2563eb',
+    green:  '#16a34a',
+    navy:   '#1e3a5f',
+    pink:   '#ec4899',
+    yellow: '#fbbf24',
+    purple: '#7c3aed',
+    grey:   '#6b7280',
+    gray:   '#6b7280',
+  };
+
+  function applyMugTint(img) {
+    if (! img || ! fabric.Image || ! fabric.Image.filters) return;
+    const hex = COLOR_HEX_MAP[(selectedVariant.color || '').toLowerCase()] || '#ffffff';
+    img.filters = [];
+    if (hex.toLowerCase() !== '#ffffff') {
+      img.filters.push(new fabric.Image.filters.BlendColor({
+        color: hex, mode: 'multiply', alpha: 1,
+      }));
+    }
+    img.applyFilters();
+  }
 
   // ── Canvas Init ───────────────────────────────────────────────────────────
   function initCanvas() {
@@ -50,7 +85,7 @@
     angle = angle || 'front';
     const key = buildVariantKey(selectedVariant.style, selectedVariant.size, selectedVariant.color, angle);
     const url  = (mc.mockupMap || {})[key];
-    return url || (mc.pluginUrl + 'public/assets/images/placeholder-mug.png');
+    return url || (mc.pluginUrl + 'public/assets/images/placeholder-mug-white.svg');
   }
 
   function loadMugBackground(callback) {
@@ -62,28 +97,59 @@
         hasControls: false,
         hasBorders:  false,
       });
+      _mugImg      = img;
+      _mugNaturalW = (img._element && img._element.naturalWidth)  || img.width  || _mugNaturalW;
+      _mugNaturalH = (img._element && img._element.naturalHeight) || img.height || _mugNaturalH;
       img.scaleToWidth(canvas.getWidth());
+      applyMugTint(img);
       canvas.setBackgroundImage(img, function () {
         canvas.requestRenderAll();
-        updateMiniPreview();
+        scheduleWarpPreview();
         if (callback) callback();
       });
     }, { crossOrigin: 'anonymous' });
   }
 
   // ── Print Area + ClipPath ─────────────────────────────────────────────────
+  //
+  // Two config schemas are supported:
+  //   • New (pixel-anchored): { x, y, width, height, pngWidth, pngHeight, wrapDeg }
+  //     — coords are in the source mug PNG's native pixels.
+  //   • Legacy (percent):     { top, left, width, height } — % of canvas.
+  //
+  // The new schema gives pixel-accurate alignment that survives canvas resize
+  // and matches what a designer calibrates on the actual mug photo.
   function getPrintAreaPx() {
     const cfgMap = mc.printAreaConfig || {};
-    // Look up by style-size first, fall back to style only, then hardcoded default
     const key = selectedVariant.style + '-' + selectedVariant.size;
-    const config = cfgMap[key] || cfgMap[selectedVariant.style] || { top: 22, left: 18, width: 64, height: 56 };
-    const w = canvas.getWidth();
-    const h = canvas.getHeight();
+    const config = cfgMap[key] || cfgMap[selectedVariant.style];
+    const cw = canvas.getWidth();
+    const ch = canvas.getHeight();
+
+    if (! config) {
+      return { left: cw * 0.18, top: ch * 0.22, width: cw * 0.64, height: ch * 0.56, wrapDeg: 140 };
+    }
+
+    // New schema: pixel-anchored to source PNG
+    if (config.pngWidth && config.x !== undefined) {
+      const pngW  = config.pngWidth;
+      const scale = cw / pngW;          // background uses scaleToWidth(canvas.getWidth())
+      return {
+        left:    Math.round(config.x      * scale),
+        top:     Math.round(config.y      * scale),
+        width:   Math.round(config.width  * scale),
+        height:  Math.round(config.height * scale),
+        wrapDeg: config.wrapDeg || 140,
+      };
+    }
+
+    // Legacy percent schema
     return {
-      top:    Math.round(h * config.top    / 100),
-      left:   Math.round(w * config.left   / 100),
-      width:  Math.round(w * config.width  / 100),
-      height: Math.round(h * config.height / 100),
+      top:     Math.round(ch * (config.top    || 0) / 100),
+      left:    Math.round(cw * (config.left   || 0) / 100),
+      width:   Math.round(cw * (config.width  || 0) / 100),
+      height:  Math.round(ch * (config.height || 0) / 100),
+      wrapDeg: 140,
     };
   }
 
@@ -178,14 +244,10 @@
     canvas.add(dimLabel);
     _printAreaGuides.push(dimLabel);
 
-    // ClipPath constrains objects to the actual (non-wrap) print area
-    canvas.clipPath = new fabric.Rect({
-      left:   pa.left,
-      top:    pa.top,
-      width:  pa.width,
-      height: pa.height,
-      absolutePositioned: true,
-    });
+    // Print-area enforcement is soft (boundary toast + green dashed rect) so
+    // the user can see the WHOLE mug while editing. A canvas-level clipPath
+    // would hide the mug background outside the print area too — confusing.
+    canvas.clipPath = null;
 
     canvas.requestRenderAll();
   }
@@ -238,6 +300,171 @@
       });
     };
     reader.readAsDataURL(file);
+  }
+
+  // ── Auto-fit active image to the print area ──────────────────────────────
+  function autoFitToPrintArea() {
+    const obj = canvas.getActiveObject();
+    if (! obj) return;
+    const isImg  = obj.type === 'image' || obj.type === 'Image';
+    const isText = obj.type === 'IText' || obj.type === 'Textbox' || obj.type === 'i-text';
+    if (! isImg && ! isText) return;
+
+    const pa = getPrintAreaPx();
+    const objW = obj.width  * (obj.scaleX || 1) / (obj.scaleX || 1) * 1; // raw width
+    const baseW = obj.width  || 1;
+    const baseH = obj.height || 1;
+    const sx = (pa.width  * 0.95) / baseW;
+    const sy = (pa.height * 0.95) / baseH;
+    const s  = Math.min(sx, sy);
+
+    obj.set({
+      scaleX: s, scaleY: s,
+      left: pa.left + pa.width  / 2 - (baseW * s) / 2,
+      top:  pa.top  + pa.height / 2 - (baseH * s) / 2,
+    });
+    obj.setCoords();
+    canvas.requestRenderAll();
+    pushHistory();
+    if (isImg) checkImageDPI(obj);
+  }
+
+  // ── Layer Panel ──────────────────────────────────────────────────────────
+  // Lists every user-design object (excludes the print-area guides). Supports
+  // click-to-select, eye toggle, lock toggle, drag reorder, rename, delete.
+  function genObjId() { return 'obj_' + Math.random().toString(36).slice(2, 9); }
+
+  function objectThumbLabel(o) {
+    if (o.type === 'IText' || o.type === 'Textbox' || o.type === 'i-text') {
+      return (o.text || '').slice(0, 18) || 'Text';
+    }
+    return 'Image';
+  }
+
+  function objectThumbIcon(o) {
+    if (o.type === 'IText' || o.type === 'Textbox' || o.type === 'i-text') return 'T';
+    return '\u{1F5BC}'; // framed picture
+  }
+
+  let _layerDragSrcId = null;
+
+  function updateLayerPanel() {
+    const list = document.getElementById('lp-list');
+    if (! list || ! canvas) return;
+
+    // Iterate top-down so the visually top-most layer appears first in the panel
+    const objs = canvas.getObjects().filter(function (o) { return ! o.excludeFromExport; });
+    const reversed = objs.slice().reverse();
+
+    list.innerHTML = '';
+    if (reversed.length === 0) {
+      list.innerHTML = '<div class="lp-empty">No layers yet — add text or upload an image.</div>';
+      return;
+    }
+
+    const active = canvas.getActiveObject();
+
+    reversed.forEach(function (o) {
+      if (! o._mcId) o._mcId = genObjId();
+      const row = document.createElement('div');
+      row.className = 'lp-item' + (o === active ? ' lp-active' : '');
+      row.draggable = true;
+      row.dataset.id = o._mcId;
+      row.innerHTML =
+        '<span class="lp-grip" title="Drag to reorder">⋮⋮</span>' +
+        '<span class="lp-thumb">' + objectThumbIcon(o) + '</span>' +
+        '<span class="lp-name" title="Double-click to rename">' + (o.name ? escapeHtml(o.name) : escapeHtml(objectThumbLabel(o))) + '</span>' +
+        '<button class="lp-btn lp-vis"  title="Show/hide">'  + (o.visible === false ? '\u{1F441}‍\u{1F5E8}' : '\u{1F441}') + '</button>' +
+        '<button class="lp-btn lp-lock" title="Lock/unlock">' + (o.lockMovementX ? '\u{1F512}' : '\u{1F513}') + '</button>' +
+        '<button class="lp-btn lp-del"  title="Delete">\u{1F5D1}</button>';
+      list.appendChild(row);
+
+      row.addEventListener('click', function (e) {
+        if (e.target.classList.contains('lp-btn') ||
+            e.target.classList.contains('lp-grip') ||
+            e.target.classList.contains('lp-name')) return;
+        canvas.setActiveObject(o);
+        canvas.requestRenderAll();
+      });
+
+      row.querySelector('.lp-vis').addEventListener('click', function (e) {
+        e.stopPropagation();
+        o.visible = o.visible === false ? true : false;
+        canvas.requestRenderAll();
+        updateLayerPanel();
+        scheduleWarpPreview();
+      });
+
+      row.querySelector('.lp-lock').addEventListener('click', function (e) {
+        e.stopPropagation();
+        const lock = ! o.lockMovementX;
+        o.lockMovementX = o.lockMovementY = lock;
+        o.lockScalingX  = o.lockScalingY  = lock;
+        o.lockRotation  = lock;
+        o.selectable    = ! lock;
+        canvas.requestRenderAll();
+        updateLayerPanel();
+      });
+
+      row.querySelector('.lp-del').addEventListener('click', function (e) {
+        e.stopPropagation();
+        canvas.remove(o);
+        canvas.requestRenderAll();
+        pushHistory();
+      });
+
+      const nameEl = row.querySelector('.lp-name');
+      nameEl.addEventListener('dblclick', function () {
+        nameEl.contentEditable = 'true';
+        nameEl.focus();
+        document.execCommand('selectAll', false, null);
+      });
+      nameEl.addEventListener('blur', function () {
+        nameEl.contentEditable = 'false';
+        o.name = nameEl.textContent.trim() || objectThumbLabel(o);
+      });
+      nameEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
+      });
+
+      // Drag-reorder
+      row.addEventListener('dragstart', function (e) {
+        _layerDragSrcId = o._mcId;
+        row.classList.add('lp-dragging');
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+      });
+      row.addEventListener('dragend', function () {
+        row.classList.remove('lp-dragging');
+        document.querySelectorAll('.lp-item').forEach(function (el) { el.classList.remove('lp-drop-target'); });
+        _layerDragSrcId = null;
+      });
+      row.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        row.classList.add('lp-drop-target');
+      });
+      row.addEventListener('dragleave', function () {
+        row.classList.remove('lp-drop-target');
+      });
+      row.addEventListener('drop', function (e) {
+        e.preventDefault();
+        row.classList.remove('lp-drop-target');
+        if (! _layerDragSrcId || _layerDragSrcId === o._mcId) return;
+        const all = canvas.getObjects().filter(function (x) { return ! x.excludeFromExport; });
+        const src = all.find(function (x) { return x._mcId === _layerDragSrcId; });
+        if (! src) return;
+        // Panel shows top-to-bottom; canvas stack-index is reverse → drop above target = move higher
+        const targetStackIdx = canvas.getObjects().indexOf(o);
+        canvas.moveTo(src, targetStackIdx);
+        canvas.requestRenderAll();
+        pushHistory();
+      });
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
   }
 
   // M9 — DPI warning
@@ -379,29 +606,175 @@
   // ── Variant update ────────────────────────────────────────────────────────
   function updateVariant(key, value) {
     selectedVariant[key] = value;
+    if (key === 'color' && _mugImg) {
+      // Color change is just a multiply re-tint on the same image — no reload.
+      applyMugTint(_mugImg);
+      canvas.requestRenderAll();
+      scheduleWarpPreview();
+      return;
+    }
     loadMugBackground();
     setupPrintArea();
-    updateMiniPreview();
+    scheduleWarpPreview();
   }
 
-  // ── Mini Preview — composite design onto mockup ───────────────────────────
-  function updateMiniPreview() {
-    const img = document.getElementById('mini-preview-img');
-    if (!img || !canvas) return;
-    // Show the canvas content (includes mug background + design) at reduced res
-    img.src = canvas.toDataURL({ format: 'png', multiplier: 0.3 });
+  // ── Warp Preview — cylindrical wrap onto mug PNG ─────────────────────────
+  //
+  // Renders the flat design onto a cylindrical surface so the user sees what
+  // the printed mug actually looks like while they edit. Math: each output
+  // column at normalized horizontal offset n = ox / halfWidth maps back to a
+  // source column whose angle θ on the cylinder satisfies sin(θ)/sin(halfWrap)
+  // = n. So θ = asin(n · sin(halfWrap)), and srcCol = (θ/wrapDeg + 0.5)·srcW.
+  // Edge columns get sampled from a wider source band → natural foreshortening.
+  function scheduleWarpPreview() {
+    if (_warpRafPending) return;
+    _warpRafPending = true;
+    requestAnimationFrame(function () {
+      _warpRafPending = false;
+      renderWarpPreview();
+    });
+  }
+
+  function renderWarpPreview() {
+    const previewCanvas = document.getElementById('warp-preview-canvas');
+    if (! previewCanvas || ! canvas) return;
+    const pctx = previewCanvas.getContext('2d');
+    const pw = previewCanvas.width;
+    const ph = previewCanvas.height;
+
+    // Capture the design layer alone (excludeFromExport guides are skipped by
+    // toDataURL automatically; we hide the mug bg to isolate user content).
+    // try/finally guarantees the bg is restored even if toDataURL throws on a
+    // tainted canvas — otherwise the mug would silently disappear forever.
+    const origBg = canvas.backgroundImage;
+    let designUrl = '';
+    try {
+      canvas.backgroundImage = null;
+      designUrl = canvas.toDataURL({ format: 'png', multiplier: 1 });
+    } catch (err) {
+      console.warn('[MugCustomizer] warp preview skipped:', err && err.message);
+      return;
+    } finally {
+      canvas.backgroundImage = origBg;
+      canvas.requestRenderAll();
+    }
+
+    const designImg = new Image();
+    designImg.onload = function () {
+      pctx.clearRect(0, 0, pw, ph);
+
+      // Fit the mug image into the preview canvas (preserve aspect).
+      // After applyFilters(), Fabric swaps _element from <img> to a <canvas>,
+      // which has no naturalWidth/naturalHeight — fall back to cached natural
+      // dims and then to element width/height so we never divide by zero.
+      const mugEl = origBg && origBg._element;
+      if (! mugEl) return;
+      const natW = _mugNaturalW || mugEl.naturalWidth || mugEl.width  || 0;
+      const natH = _mugNaturalH || mugEl.naturalHeight || mugEl.height || 0;
+      if (! natW || ! natH) return;
+      const fit = Math.min(pw / natW, ph / natH);
+      const drawW = natW * fit;
+      const drawH = natH * fit;
+      const drawX = (pw - drawW) / 2;
+      const drawY = (ph - drawH) / 2;
+      pctx.drawImage(mugEl, drawX, drawY, drawW, drawH);
+
+      // Translate the print area from main-canvas px → preview px
+      const pa = getPrintAreaPx();
+      const cw = canvas.getWidth();
+      const k = drawW / cw;                 // shared scale factor for both axes
+      const paLeft   = drawX + pa.left   * k;
+      const paTop    = drawY + pa.top    * k;
+      const paWidth  = pa.width  * k;
+      const paHeight = pa.height * k;
+
+      // Cylindrical sweep
+      const halfWrap = ((pa.wrapDeg || 140) * Math.PI) / 360; // half arc, radians
+      const sinHalf  = Math.sin(halfWrap);
+      const cols     = Math.max(1, Math.round(paWidth));
+      const srcW     = pa.width;             // sample from main-canvas-resolution design
+      const srcH     = pa.height;
+      const srcLeft  = pa.left;
+      const srcTop   = pa.top;
+      const center   = cols / 2;
+
+      for (let ox = 0; ox < cols; ox++) {
+        const norm  = (ox - center) / center;             // -1 .. +1
+        const theta = Math.asin(Math.max(-1, Math.min(1, norm * sinHalf)));
+        const srcCol = ((theta / (2 * halfWrap)) + 0.5) * srcW;
+        try {
+          pctx.drawImage(
+            designImg,
+            srcLeft + srcCol, srcTop, 1, srcH,
+            paLeft + ox,      paTop, 1, paHeight
+          );
+        } catch (e) { /* out-of-bounds source column — skip */ }
+      }
+    };
+    designImg.src = designUrl;
+  }
+
+  // Backwards-compat shim: any old call sites will still work.
+  function updateMiniPreview() { scheduleWarpPreview(); }
+
+  // ── Print Export — design-only at production DPI ─────────────────────────
+  //
+  // The previous serializeDesign exported the full canvas (mug photo + design
+  // composite) which is unusable as a production print file. The press needs
+  // a transparent PNG containing ONLY the design, cropped to the print area,
+  // at ~300 DPI of the real-world print dimensions.
+  function exportPrintFile() {
+    const pa  = getPrintAreaPx();
+    const dim = PRINT_DIMS_IN[selectedVariant.size] || PRINT_DIMS_IN['11oz'];
+    const TARGET_DPI = 300;
+    const mult = (dim.h * TARGET_DPI) / Math.max(1, pa.height);
+
+    const origBg = canvas.backgroundImage;
+    let url = '';
+    try {
+      canvas.backgroundImage = null;
+      url = canvas.toDataURL({
+        format:              'png',
+        multiplier:          mult,
+        left:                pa.left,
+        top:                 pa.top,
+        width:               pa.width,
+        height:              pa.height,
+        enableRetinaScaling: false,
+      });
+    } catch (err) {
+      console.warn('[MugCustomizer] print export skipped:', err && err.message);
+    } finally {
+      canvas.backgroundImage = origBg;
+      canvas.requestRenderAll();
+    }
+    return {
+      data_url:    url,
+      width_in:    dim.w,
+      height_in:   dim.h,
+      width_px:    Math.round(pa.width  * mult),
+      height_px:   Math.round(pa.height * mult),
+      dpi:         TARGET_DPI,
+    };
   }
 
   // ── Auto Save ─────────────────────────────────────────────────────────────
   function serializeDesign(highRes) {
+    let mockupUrl = '';
+    try {
+      mockupUrl = canvas.toDataURL({ format: 'png', multiplier: highRes ? 2 : 1 });
+    } catch (err) {
+      console.warn('[MugCustomizer] mockup dataUrl skipped:', err && err.message);
+    }
     return {
       canvas_json:     canvas.toJSON(['excludeFromExport']),
-      canvas_data_url: canvas.toDataURL({ format: 'png', multiplier: highRes ? 4 : 2 }),
+      mockup_data_url: mockupUrl,                     // mug + design (cart thumbnail)
+      print_file:     highRes ? exportPrintFile() : null, // production-ready (Review only)
       variant:         selectedVariant,
       addons:          selectedAddons,
       canvas_width:    500,
       canvas_height:   580,
-      version:         '1.0',
+      version:         '1.1',
     };
   }
 
@@ -416,14 +789,21 @@
       const saved = localStorage.getItem('mugDesign_' + cfg.productId);
       if (! saved) return;
       const design = JSON.parse(saved);
-      if (design && design.canvas_json && design.canvas_json.objects && design.canvas_json.objects.length > 0) {
-        canvas.loadFromJSON(design.canvas_json, function () {
-          canvas.requestRenderAll();
-          pushHistory();
-        });
-      }
+      // Variant must be set before setupPrintArea so the print-area config
+      // resolves to the saved variant, not the URL-default one.
       if (design.variant) selectedVariant = design.variant;
       if (design.addons)  selectedAddons  = design.addons;
+      if (design && design.canvas_json && design.canvas_json.objects && design.canvas_json.objects.length > 0) {
+        canvas.loadFromJSON(design.canvas_json, function () {
+          // loadFromJSON wipes the canvas before populating, which removes the
+          // print-area guides we added earlier. Re-add them and refresh layers.
+          setupPrintArea();
+          canvas.requestRenderAll();
+          pushHistory();
+          updateLayerPanel();
+          scheduleWarpPreview();
+        });
+      }
     } catch (e) {}
   }
 
@@ -478,13 +858,13 @@
   let _boundaryWarningTimer = null;
 
   function bindCanvasEvents() {
-    canvas.on('object:added',    function () { if (!isHistoryLock) pushHistory(); updateMiniPreview(); setSaveStatus('● Unsaved', '#f59e0b'); });
-    canvas.on('object:modified', function () { if (!isHistoryLock) pushHistory(); updateMiniPreview(); setSaveStatus('● Unsaved', '#f59e0b'); });
-    canvas.on('object:removed',  function () { if (!isHistoryLock) pushHistory(); updateMiniPreview(); setSaveStatus('● Unsaved', '#f59e0b'); });
+    canvas.on('object:added',    function () { if (!isHistoryLock) pushHistory(); updateMiniPreview(); updateLayerPanel(); setSaveStatus('● Unsaved', '#f59e0b'); });
+    canvas.on('object:modified', function () { if (!isHistoryLock) pushHistory(); updateMiniPreview(); updateLayerPanel(); setSaveStatus('● Unsaved', '#f59e0b'); });
+    canvas.on('object:removed',  function () { if (!isHistoryLock) pushHistory(); updateMiniPreview(); updateLayerPanel(); setSaveStatus('● Unsaved', '#f59e0b'); });
 
-    canvas.on('selection:created', function (e) { showContextBar(e.selected[0]); });
-    canvas.on('selection:updated', function (e) { showContextBar(e.selected[0]); });
-    canvas.on('selection:cleared', function ()  { hideContextBar(); });
+    canvas.on('selection:created', function (e) { showContextBar(e.selected[0]); updateLayerPanel(); });
+    canvas.on('selection:updated', function (e) { showContextBar(e.selected[0]); updateLayerPanel(); });
+    canvas.on('selection:cleared', function ()  { hideContextBar(); updateLayerPanel(); });
 
     // C5 — boundary warning + M13 snap guides on drag/scale
     canvas.on('object:moving',  function (e) { checkBoundary(e); snapGuides(e); });
@@ -672,13 +1052,61 @@
       document.getElementById('btn-add-text').addEventListener('click', addTextBox);
     }
 
-    // Upload
+    // Upload (file picker)
     if (uploadInput) {
       uploadInput.addEventListener('change', function () {
         if (this.files && this.files[0]) {
           handleFileUpload(this.files[0]);
           this.value = '';
         }
+      });
+    }
+
+    // Layer-panel toggle (tool rail)
+    const toolLayers   = document.getElementById('tool-layers');
+    const layerPanel   = document.getElementById('layer-panel');
+    if (toolLayers && layerPanel) {
+      toolLayers.addEventListener('click', function () {
+        const open = layerPanel.style.display !== 'block';
+        layerPanel.style.display = open ? 'block' : 'none';
+        toolLayers.classList.toggle('active', open);
+        if (open) updateLayerPanel();
+      });
+    }
+    const layerPanelClose = document.getElementById('layer-panel-close');
+    if (layerPanelClose && layerPanel) {
+      layerPanelClose.addEventListener('click', function () {
+        layerPanel.style.display = 'none';
+        if (toolLayers) toolLayers.classList.remove('active');
+      });
+    }
+
+    // Drag-and-drop image upload over the canvas stage
+    const stage   = document.getElementById('canvas-stage');
+    const dropOv  = document.getElementById('drop-overlay');
+    if (stage) {
+      let _dragDepth = 0;
+      stage.addEventListener('dragenter', function (e) {
+        if (! e.dataTransfer || ! Array.from(e.dataTransfer.types || []).includes('Files')) return;
+        e.preventDefault();
+        _dragDepth++;
+        if (dropOv) dropOv.classList.add('active');
+      });
+      stage.addEventListener('dragover', function (e) {
+        if (! e.dataTransfer) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      });
+      stage.addEventListener('dragleave', function () {
+        _dragDepth = Math.max(0, _dragDepth - 1);
+        if (_dragDepth === 0 && dropOv) dropOv.classList.remove('active');
+      });
+      stage.addEventListener('drop', function (e) {
+        e.preventDefault();
+        _dragDepth = 0;
+        if (dropOv) dropOv.classList.remove('active');
+        const files = e.dataTransfer && e.dataTransfer.files;
+        if (files && files[0]) handleFileUpload(files[0]);
       });
     }
 
@@ -796,6 +1224,10 @@
     }
 
     // ── Image context bar bindings ──────────────────────────────────────────
+
+    // Auto-fit (image bar)
+    const ctxFit = document.getElementById('ctx-img-fit');
+    if (ctxFit) ctxFit.addEventListener('click', autoFitToPrintArea);
 
     // M8 — Flip H / V
     const flipH = document.getElementById('ctx-img-flip-h');

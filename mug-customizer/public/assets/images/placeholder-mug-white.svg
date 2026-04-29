@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2000 2000" width="2000" height="2000">
+  <defs>
+    <linearGradient id="bodyShade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"    stop-color="#d8d8d8"/>
+      <stop offset="0.10" stop-color="#ffffff"/>
+      <stop offset="0.50" stop-color="#ffffff"/>
+      <stop offset="0.90" stop-color="#ffffff"/>
+      <stop offset="1"    stop-color="#c8c8c8"/>
+    </linearGradient>
+    <radialGradient id="rimShade" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.85" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1"    stop-color="#888"    stop-opacity="0.35"/>
+    </radialGradient>
+    <filter id="softShadow" x="-20%" y="-10%" width="140%" height="130%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+
+  <!-- Drop shadow under mug -->
+  <ellipse cx="1000" cy="1640" rx="500" ry="36"
+           fill="#000" opacity="0.18" filter="url(#softShadow)"/>
+
+  <!-- Handle (right side) -->
+  <path d="M 1455 720
+           C 1760 720, 1820 940, 1820 1080
+           C 1820 1220, 1760 1380, 1455 1400
+           L 1455 1300
+           C 1660 1280, 1700 1180, 1700 1080
+           C 1700 980,  1660 880,  1455 850
+           Z"
+        fill="url(#bodyShade)" stroke="#bdbdbd" stroke-width="3"/>
+
+  <!-- Mug body (cylinder, front view) -->
+  <rect x="450" y="640" width="1010" height="980" rx="22" ry="22"
+        fill="url(#bodyShade)" stroke="#bdbdbd" stroke-width="3"/>
+
+  <!-- Rim (top inner) -->
+  <ellipse cx="955" cy="640" rx="505" ry="48"
+           fill="#ffffff" stroke="#bdbdbd" stroke-width="3"/>
+  <ellipse cx="955" cy="640" rx="475" ry="34"
+           fill="#e8e8e8"/>
+  <ellipse cx="955" cy="638" rx="475" ry="34"
+           fill="url(#rimShade)"/>
+
+  <!-- Bottom edge highlight -->
+  <ellipse cx="955" cy="1620" rx="505" ry="14"
+           fill="#bdbdbd" opacity="0.55"/>
+</svg>

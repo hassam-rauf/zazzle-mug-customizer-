@@ -3,22 +3,33 @@ defined('ABSPATH') || exit;
 
 class Mug_Customizer_Variant_Resolver {
 
-    // Default print area config keyed by style-size (values in % of canvas dimensions)
-    // 15oz mugs are taller/wider, so the print area occupies a larger portion of the canvas
+    /**
+     * Default print-area config keyed by style-size.
+     *
+     * Coordinates are in NATIVE PNG PIXELS (not percentages), referenced to
+     * `pngWidth` × `pngHeight`. Front-side cylindrical wrap is described by
+     * `wrapDeg` (visible arc of the cylinder seen in the front photo).
+     *
+     * Real-world print dimensions live on the JS side (`PRINT_DIMS_IN`) and
+     * are independent of pixel calibration; together they drive the DPI check
+     * and the production print file size.
+     */
     private const DEFAULT_PRINT_AREAS = [
-        'classic-11oz'  => ['top' => 22, 'left' => 18, 'width' => 64, 'height' => 56],
-        'classic-15oz'  => ['top' => 20, 'left' => 17, 'width' => 66, 'height' => 60],
-        'travel-11oz'   => ['top' => 18, 'left' => 20, 'width' => 60, 'height' => 62],
-        'travel-15oz'   => ['top' => 16, 'left' => 19, 'width' => 62, 'height' => 66],
-        'espresso-11oz' => ['top' => 24, 'left' => 18, 'width' => 62, 'height' => 52],
-        'espresso-15oz' => ['top' => 22, 'left' => 17, 'width' => 64, 'height' => 56],
-        'two-tone-11oz' => ['top' => 22, 'left' => 18, 'width' => 64, 'height' => 56],
-        'two-tone-15oz' => ['top' => 20, 'left' => 17, 'width' => 66, 'height' => 60],
-        // Style-only fallbacks (used when size not specified)
-        'classic'  => ['top' => 22, 'left' => 18, 'width' => 64, 'height' => 56],
-        'travel'   => ['top' => 18, 'left' => 20, 'width' => 60, 'height' => 62],
-        'espresso' => ['top' => 24, 'left' => 18, 'width' => 62, 'height' => 52],
-        'two-tone' => ['top' => 22, 'left' => 18, 'width' => 64, 'height' => 56],
+        // Tuned to the bundled placeholder-mug-white.svg (2000x2000 reference)
+        'classic-11oz'  => ['x' => 530, 'y' => 760, 'width' => 830, 'height' => 700, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
+        'classic-15oz'  => ['x' => 510, 'y' => 730, 'width' => 870, 'height' => 780, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
+        'travel-11oz'   => ['x' => 560, 'y' => 700, 'width' => 760, 'height' => 800, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 130],
+        'travel-15oz'   => ['x' => 540, 'y' => 670, 'width' => 800, 'height' => 860, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 130],
+        'espresso-11oz' => ['x' => 560, 'y' => 820, 'width' => 760, 'height' => 600, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
+        'espresso-15oz' => ['x' => 540, 'y' => 790, 'width' => 800, 'height' => 660, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
+        'two-tone-11oz' => ['x' => 530, 'y' => 760, 'width' => 830, 'height' => 700, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
+        'two-tone-15oz' => ['x' => 510, 'y' => 730, 'width' => 870, 'height' => 780, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
+
+        // Style-only fallbacks (used when size is missing)
+        'classic'  => ['x' => 530, 'y' => 760, 'width' => 830, 'height' => 700, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
+        'travel'   => ['x' => 560, 'y' => 700, 'width' => 760, 'height' => 800, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 130],
+        'espresso' => ['x' => 560, 'y' => 820, 'width' => 760, 'height' => 600, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
+        'two-tone' => ['x' => 530, 'y' => 760, 'width' => 830, 'height' => 700, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
     ];
 
     public function get_mockup_map(int $product_id): array {
@@ -31,14 +42,17 @@ class Mug_Customizer_Variant_Resolver {
         if (isset($map[$variant_key])) {
             return $map[$variant_key];
         }
-        // Fallback placeholder
-        return MUG_CUSTOMIZER_PLUGIN_URL . 'public/assets/images/placeholder-mug.png';
+        // Transparent vector placeholder until the client supplies real PNGs.
+        return MUG_CUSTOMIZER_PLUGIN_URL . 'public/assets/images/placeholder-mug-white.svg';
     }
 
     public function get_print_area_config(int $product_id): array {
         $raw = get_post_meta($product_id, '_print_area_config', true);
         if ($raw) {
-            return (array) json_decode($raw, true);
+            $stored = (array) json_decode($raw, true);
+            // Merge stored values over defaults so missing keys (e.g. new
+            // styles) still resolve, and legacy entries can coexist.
+            return array_replace(self::DEFAULT_PRINT_AREAS, $stored);
         }
         return self::DEFAULT_PRINT_AREAS;
     }
@@ -47,7 +61,6 @@ class Mug_Customizer_Variant_Resolver {
         $config = $this->get_print_area_config($product_id);
         $style  = strtolower($style);
         $size   = strtolower($size);
-        // Try style-size compound key first, then style-only, then default
         $key = $size ? "{$style}-{$size}" : $style;
         return $config[$key] ?? $config[$style] ?? self::DEFAULT_PRINT_AREAS['classic'];
     }

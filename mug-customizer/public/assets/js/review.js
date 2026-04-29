@@ -73,7 +73,8 @@
     const addons      = design.addons  || [];
     const addonPrices = mc.addonPrices || {};
     const mockupMap   = mc.mockupMap   || {};
-    const designData  = design.canvas_data_url || null;
+    // v1.1+ uses `mockup_data_url`; legacy designs may still have `canvas_data_url`.
+    const designData  = design.mockup_data_url || design.canvas_data_url || null;
 
     // Populate options list
     setText('review-opt-style',  '• Style: '   + ucFirst(variant.style  || '—'));
@@ -89,17 +90,22 @@
       if (thumbImg) thumbImg.src = url;
     });
 
-    // Main image = front with design composited on top — C1 fix
+    // Main image — prefer the full mockup snapshot from the designer (already
+    // tinted + design composited). Fall back to legacy mockup+overlay path.
     const frontKey = buildVariantKey(variant.style, variant.size, variant.color, 'front');
-    const frontUrl = mockupMap[frontKey] || (mc.pluginUrl + 'public/assets/images/placeholder-mug.png');
+    const frontUrl = mockupMap[frontKey] || (mc.pluginUrl + 'public/assets/images/placeholder-mug-white.svg');
     const mainImg  = document.getElementById('review-main-img');
+    const frontThumb = document.getElementById('thumb-front');
 
-    compositeOntoMockup(frontUrl, designData, function (compositeUrl) {
-      if (mainImg) mainImg.src = compositeUrl;
-      // Also update front thumb with composite
-      const frontThumb = document.getElementById('thumb-front');
-      if (frontThumb) frontThumb.src = compositeUrl;
-    });
+    if (design.mockup_data_url) {
+      if (mainImg)    mainImg.src    = design.mockup_data_url;
+      if (frontThumb) frontThumb.src = design.mockup_data_url;
+    } else {
+      compositeOntoMockup(frontUrl, designData, function (compositeUrl) {
+        if (mainImg)    mainImg.src    = compositeUrl;
+        if (frontThumb) frontThumb.src = compositeUrl;
+      });
+    }
 
     // Price
     let total = parseFloat(cfg.basePrice || 0);

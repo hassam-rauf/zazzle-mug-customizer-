@@ -102,6 +102,7 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
     <!-- Image Context Bar (shows when image object selected) -->
     <div id="img-context-bar" style="display:none;">
       <span class="ctx-label"><?php esc_html_e('Image', 'mug-customizer'); ?></span>
+      <button type="button" id="ctx-img-fit" title="Fit to print area">&#10696;</button>
       <button type="button" id="ctx-img-flip-h" title="Flip horizontal">&#8596;</button>
       <button type="button" id="ctx-img-flip-v" title="Flip vertical">&#8597;</button>
       <div class="ctx-sep"></div>
@@ -141,7 +142,29 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
       <div class="tool-item" id="tool-images" title="Images">
         <span class="tool-icon">🖼</span>
       </div>
+      <div class="tool-item" id="tool-layers" title="Layers">
+        <span class="tool-icon">☰</span>
+        <span class="tool-label"><?php esc_html_e('Layers', 'mug-customizer'); ?></span>
+      </div>
       <div class="tool-rail-more">▼</div>
+    </div>
+
+    <!-- Layer Panel (floating, toggled by Layers tool) -->
+    <div id="layer-panel" style="display:none;">
+      <div class="panel-header">
+        <h3><?php esc_html_e('Layers', 'mug-customizer'); ?></h3>
+        <button type="button" class="panel-close" id="layer-panel-close">✕</button>
+      </div>
+      <div id="lp-list"></div>
+    </div>
+
+    <!-- Drag-drop upload overlay -->
+    <div id="drop-overlay">
+      <div class="drop-overlay-inner">
+        <div class="drop-icon">⬆</div>
+        <div class="drop-text"><?php esc_html_e('Drop image to upload', 'mug-customizer'); ?></div>
+        <div class="drop-hint"><?php esc_html_e('JPG or PNG, up to', 'mug-customizer'); ?> <?php echo esc_html(defined('MUG_CUSTOMIZER_MAX_UPLOAD_MB') ? MUG_CUSTOMIZER_MAX_UPLOAD_MB : 10); ?>MB</div>
+      </div>
     </div>
 
     <!-- Add Text Panel (floating, shows when text tool active) -->
@@ -224,8 +247,8 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
       </div>
 
       <div class="mini-preview-wrap">
-        <img id="mini-preview-img" src="" alt="<?php esc_attr_e('Mug preview', 'mug-customizer'); ?>">
-        <div class="mini-label"><?php esc_html_e('Your design', 'mug-customizer'); ?></div>
+        <canvas id="warp-preview-canvas" width="320" height="260" style="display:block;width:100%;height:auto;background:#fafafa;border-radius:6px;"></canvas>
+        <div class="mini-label"><?php esc_html_e('Live preview (wrapped on mug)', 'mug-customizer'); ?></div>
       </div>
     </div>
 

@@ -187,7 +187,7 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 
 /* Mini preview inside variant panel */
 .mini-preview-wrap { margin-top: 4px; text-align: center; }
-#mini-preview-img { width: 100%; height: 110px; object-fit: contain; display: block; border-radius: 4px; background: #f0f4f8; }
+#warp-preview-canvas { width: 100%; height: auto; display: block; border-radius: 4px; background: #f0f4f8; }
 .mini-label { font-size: 11px; color: var(--muted); margin-top: 4px; font-weight: 500; }
 
 /* ── Canvas container ───────────────────────────────────────────────────── */
@@ -479,6 +479,59 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
   background: var(--card); padding: 30px; border-radius: 12px;
   font-size: 16px; text-align: center; max-width: 320px;
 }
+
+/* ── Layer panel ────────────────────────────────────────────────────────── */
+#layer-panel {
+  position: absolute; right: 24px; bottom: 80px;
+  width: 280px; max-height: 60vh; overflow: auto;
+  background: #fff; border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.18);
+  z-index: 60; padding: 0;
+}
+#layer-panel .panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-bottom: 1px solid #eee; font-weight: 600;
+}
+#layer-panel .panel-header h3 { margin: 0; font-size: 14px; color: #222; }
+#layer-panel .panel-close { background: none; border: 0; font-size: 16px; cursor: pointer; color: #666; }
+#lp-list { padding: 6px; }
+.lp-empty { padding: 18px 12px; color: #888; font-size: 12px; text-align: center; }
+.lp-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer;
+  user-select: none; font-size: 12px; color: #333;
+}
+.lp-item:hover { background: #f5f7fa; }
+.lp-item.lp-active { background: #e8f1ff; outline: 1px solid #2563eb; }
+.lp-item.lp-dragging  { opacity: 0.45; }
+.lp-item.lp-drop-target { box-shadow: 0 -2px 0 0 #2563eb inset; }
+.lp-grip  { color: #999; cursor: grab; font-size: 11px; }
+.lp-thumb { width: 22px; height: 22px; line-height: 22px; text-align: center;
+            background: #f0f4f8; border-radius: 4px; font-weight: 600; flex-shrink: 0; }
+.lp-name  { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; outline: none; }
+.lp-name[contenteditable="true"] { background: #fffbe6; padding: 1px 4px; border-radius: 3px; }
+.lp-btn   { background: none; border: 0; cursor: pointer; padding: 2px 4px;
+            font-size: 13px; color: #555; border-radius: 4px; }
+.lp-btn:hover { background: #e8eaee; color: #111; }
+
+/* ── Drop overlay (drag image onto canvas) ──────────────────────────────── */
+#drop-overlay {
+  position: absolute; inset: 0; z-index: 80;
+  background: rgba(37, 99, 235, 0.08);
+  border: 3px dashed #2563eb;
+  display: none;
+  align-items: center; justify-content: center;
+  pointer-events: none;
+  border-radius: 12px;
+}
+#drop-overlay.active { display: flex; }
+#drop-overlay .drop-overlay-inner {
+  background: #fff; padding: 28px 36px; border-radius: 10px;
+  text-align: center; box-shadow: 0 6px 24px rgba(0,0,0,.15);
+}
+#drop-overlay .drop-icon { font-size: 36px; color: #2563eb; }
+#drop-overlay .drop-text { font-size: 16px; font-weight: 600; color: #222; margin-top: 8px; }
+#drop-overlay .drop-hint { font-size: 12px; color: #777; margin-top: 4px; }
 
 /* ── Admin order meta ───────────────────────────────────────────────────── */
 .mug-design-col { min-width: 180px; }
