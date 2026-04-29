@@ -866,9 +866,14 @@
     canvas.on('selection:updated', function (e) { showContextBar(e.selected[0]); updateLayerPanel(); });
     canvas.on('selection:cleared', function ()  { hideContextBar(); updateLayerPanel(); });
 
-    // C5 — boundary warning + M13 snap guides on drag/scale
-    canvas.on('object:moving',  function (e) { checkBoundary(e); snapGuides(e); });
-    canvas.on('object:scaling', checkBoundary);
+    // C5 — boundary warning + M13 snap guides + live warp preview on drag/scale.
+    // Zazzle parity: the cylindrical preview must follow every pointer move,
+    // not wait for object:modified (which only fires on mouse release).
+    // updateMiniPreview() funnels into scheduleWarpPreview() which is RAF-
+    // coalesced, so calling it on every mousemove is cheap.
+    canvas.on('object:moving',   function (e) { checkBoundary(e); snapGuides(e); updateMiniPreview(); });
+    canvas.on('object:scaling',  function (e) { checkBoundary(e); updateMiniPreview(); });
+    canvas.on('object:rotating', function ()  { updateMiniPreview(); });
     canvas.on('object:modified', function () { clearGuides(); });
 
     // C7 — scroll-wheel zoom
