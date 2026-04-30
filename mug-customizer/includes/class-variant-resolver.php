@@ -16,7 +16,7 @@ class Mug_Customizer_Variant_Resolver {
      */
     private const DEFAULT_PRINT_AREAS = [
         // Tuned to the bundled placeholder-mug-white.svg (2000x2000 reference)
-        'classic-11oz'  => ['x' => 530, 'y' => 760, 'width' => 830, 'height' => 700, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
+        'classic-11oz'  => ['x' => 500, 'y' => 700, 'width' => 800, 'height' => 750, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
         'classic-15oz'  => ['x' => 510, 'y' => 730, 'width' => 870, 'height' => 780, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
         'travel-11oz'   => ['x' => 560, 'y' => 700, 'width' => 760, 'height' => 800, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 130],
         'travel-15oz'   => ['x' => 540, 'y' => 670, 'width' => 800, 'height' => 860, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 130],
@@ -26,7 +26,7 @@ class Mug_Customizer_Variant_Resolver {
         'two-tone-15oz' => ['x' => 510, 'y' => 730, 'width' => 870, 'height' => 780, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
 
         // Style-only fallbacks (used when size is missing)
-        'classic'  => ['x' => 530, 'y' => 760, 'width' => 830, 'height' => 700, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
+        'classic'  => ['x' => 500, 'y' => 700, 'width' => 800, 'height' => 750, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
         'travel'   => ['x' => 560, 'y' => 700, 'width' => 760, 'height' => 800, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 130],
         'espresso' => ['x' => 560, 'y' => 820, 'width' => 760, 'height' => 600, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
         'two-tone' => ['x' => 530, 'y' => 760, 'width' => 830, 'height' => 700, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],

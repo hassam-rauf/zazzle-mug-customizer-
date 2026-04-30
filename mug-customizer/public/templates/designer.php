@@ -246,9 +246,45 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
         </div>
       </div>
 
+      <!-- ── Multi-angle live preview (Zazzle-parity) ──────────────────── -->
       <div class="mini-preview-wrap">
-        <canvas id="warp-preview-canvas" width="320" height="260" style="display:block;width:100%;height:auto;background:#fafafa;border-radius:6px;"></canvas>
-        <div class="mini-label"><?php esc_html_e('Live preview (wrapped on mug)', 'mug-customizer'); ?></div>
+        <canvas id="warp-preview-canvas" width="320" height="260"></canvas>
+        <div id="preview-angle-label" class="mini-label">Front</div>
+
+        <div class="angle-strip-header">
+          <span class="angle-strip-title"><?php esc_html_e('View angles', 'mug-customizer'); ?></span>
+          <span class="angle-strip-hint"><?php esc_html_e('Drag design to update', 'mug-customizer'); ?></span>
+        </div>
+        <div id="angle-strip" class="angle-strip">
+          <div class="angle-thumb" data-angle="-70" data-label="Left">
+            <canvas width="62" height="52"></canvas>
+            <span><?php esc_html_e('Left', 'mug-customizer'); ?></span>
+          </div>
+          <div class="angle-thumb" data-angle="-35" data-label="Front L">
+            <canvas width="62" height="52"></canvas>
+            <span><?php esc_html_e('Front L', 'mug-customizer'); ?></span>
+          </div>
+          <div class="angle-thumb active" data-angle="0" data-label="Center">
+            <canvas width="62" height="52"></canvas>
+            <span><?php esc_html_e('Center', 'mug-customizer'); ?></span>
+          </div>
+          <div class="angle-thumb" data-angle="35" data-label="Front R">
+            <canvas width="62" height="52"></canvas>
+            <span><?php esc_html_e('Front R', 'mug-customizer'); ?></span>
+          </div>
+          <div class="angle-thumb" data-angle="70" data-label="Right">
+            <canvas width="62" height="52"></canvas>
+            <span><?php esc_html_e('Right', 'mug-customizer'); ?></span>
+          </div>
+          <div class="angle-thumb" data-angle="130" data-label="Handle">
+            <canvas width="62" height="52"></canvas>
+            <span><?php esc_html_e('Handle', 'mug-customizer'); ?></span>
+          </div>
+          <div class="angle-thumb" data-angle="-999" data-label="Donut" data-is-donut="true">
+            <canvas width="62" height="52"></canvas>
+            <span><?php esc_html_e('Donut', 'mug-customizer'); ?></span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -268,6 +304,57 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
   </div><!-- /#canvas-stage -->
 
 </div><!-- /#designer-wrap -->
+
+<!-- ── Full Preview Modal (Zazzle-style: thumb strip + large view) ─────── -->
+<div id="preview-modal" role="dialog" aria-modal="true" aria-label="<?php esc_attr_e('Mug Preview', 'mug-customizer'); ?>">
+  <div id="preview-modal-dialog">
+
+    <button type="button" id="preview-modal-close" title="<?php esc_attr_e('Close preview', 'mug-customizer'); ?>">✕</button>
+
+    <div id="preview-modal-inner">
+
+      <!-- Left thumbnail strip (7 views) -->
+      <div id="preview-modal-strip">
+        <div class="preview-modal-thumb active" data-angle="-70" data-label="Left">
+          <canvas width="72" height="60"></canvas>
+          <span><?php esc_html_e('Left', 'mug-customizer'); ?></span>
+        </div>
+        <div class="preview-modal-thumb" data-angle="-35" data-label="Front L">
+          <canvas width="72" height="60"></canvas>
+          <span><?php esc_html_e('Front L', 'mug-customizer'); ?></span>
+        </div>
+        <div class="preview-modal-thumb" data-angle="0" data-label="Center">
+          <canvas width="72" height="60"></canvas>
+          <span><?php esc_html_e('Center', 'mug-customizer'); ?></span>
+        </div>
+        <div class="preview-modal-thumb" data-angle="35" data-label="Front R">
+          <canvas width="72" height="60"></canvas>
+          <span><?php esc_html_e('Front R', 'mug-customizer'); ?></span>
+        </div>
+        <div class="preview-modal-thumb" data-angle="70" data-label="Right">
+          <canvas width="72" height="60"></canvas>
+          <span><?php esc_html_e('Right', 'mug-customizer'); ?></span>
+        </div>
+        <div class="preview-modal-thumb" data-angle="130" data-label="Handle">
+          <canvas width="72" height="60"></canvas>
+          <span><?php esc_html_e('Handle', 'mug-customizer'); ?></span>
+        </div>
+        <div class="preview-modal-thumb" data-angle="-999" data-label="Donut" data-is-donut="true">
+          <canvas width="72" height="60"></canvas>
+          <span><?php esc_html_e('Donut', 'mug-customizer'); ?></span>
+        </div>
+        <div class="preview-modal-strip-scroll">▼</div>
+      </div>
+
+      <!-- Right large preview area -->
+      <div id="preview-modal-main">
+        <canvas id="preview-modal-canvas" width="500" height="440"></canvas>
+        <div id="preview-modal-label"><?php esc_html_e('Left', 'mug-customizer'); ?></div>
+      </div>
+
+    </div>
+  </div>
+</div>
 
 <!-- Hidden data for JS -->
 <script>

@@ -18,6 +18,22 @@
   let _mugNaturalH     = 2000;
   let _warpRafPending  = false;
 
+  // Multi-angle preview — matches Zazzle's angle-strip UX.
+  // viewHalf (65°): angular half-FOV of the virtual camera; controls how much
+  // of the cylinder is visible in each thumbnail. Higher = wider view, more
+  // compression at edges. Lower = tighter / less foreshortening.
+  var PREVIEW_ANGLES = [
+    { deg: -70,  label: 'Left'    },
+    { deg: -35,  label: 'Front L' },
+    { deg:   0,  label: 'Center'  },
+    { deg:  35,  label: 'Front R' },
+    { deg:  70,  label: 'Right'   },
+    { deg: 130,  label: 'Handle'  },
+    { deg: -999, label: 'Donut', isDonut: true },
+  ];
+  var VIEW_HALF_DEG   = 65;   // camera half-FOV in degrees
+  var _activeAngleDeg = 0;    // currently selected view angle (degrees)
+
   // P3 — canvas pan state
   let _spaceDown = false;
   let _isPanning = false;
@@ -205,17 +221,24 @@
     canvas.add(safeZone);
     _printAreaGuides.push(safeZone);
 
-    // Seam lines at 25%, 50%, 75% of wrap width
-    [0.25, 0.50, 0.75].forEach(function (pct) {
-      const seam = new fabric.Line(
-        [pa.left + pa.width * 1.7 * pct, pa.top, pa.left + pa.width * 1.7 * pct, pa.top + pa.height],
-        { stroke: '#4caf50', strokeWidth: 1.5, strokeDashArray: [4, 3], opacity: 0.65, selectable: false, evented: false, excludeFromExport: true }
+    // Zone divider lines — subtle dotted verticals matching Zazzle's style
+    // (no text labels on canvas; zone names only appear in the angle-strip/preview)
+    var wrapDeg = pa.wrapDeg || 140;
+    var ZONE_ANGLES = [-70, -35, 0, 35, 70, 130];
+    for (var zi = 0; zi < ZONE_ANGLES.length - 1; zi++) {
+      var boundaryAngle = (ZONE_ANGLES[zi] + ZONE_ANGLES[zi + 1]) / 2;
+      var bt = boundaryAngle / wrapDeg + 0.5;
+      var bx = Math.round(pa.left + bt * pa.width);
+      if (bx <= pa.left || bx > pa.left + pa.width * 1.76) continue;
+      var zSeam = new fabric.Line(
+        [bx, pa.top, bx, pa.top + pa.height],
+        { stroke: '#4caf50', strokeWidth: 1, strokeDashArray: [2, 7], opacity: 0.45, selectable: false, evented: false, excludeFromExport: true }
       );
-      canvas.add(seam);
-      _printAreaGuides.push(seam);
-    });
+      canvas.add(zSeam);
+      _printAreaGuides.push(zSeam);
+    }
 
-    // P12 — "Print Area" label at top-left of boundary
+    // "Print Area" label at top-left of boundary
     const paLabel = new fabric.Text('Print Area', {
       left:      pa.left + 4,
       top:       pa.top  - 18,
@@ -635,87 +658,297 @@
     });
   }
 
+  // Capture only the design layer: hide mug background AND all print-area
+  // guide objects (excludeFromExport) so neither bleeds into the preview/export.
+  function _captureDesignLayer(multiplier) {
+    const origBg = canvas.backgroundImage;
+    const guides = canvas.getObjects().filter(function (o) { return o.excludeFromExport; });
+    guides.forEach(function (g) { g.visible = false; });
+    let url = '';
+    try {
+      canvas.backgroundImage = null;
+      url = canvas.toDataURL({ format: 'png', multiplier: multiplier || 1 });
+    } catch (e) {
+      console.warn('[MugCustomizer] capture skipped:', e && e.message);
+    } finally {
+      canvas.backgroundImage = origBg;
+      guides.forEach(function (g) { g.visible = true; });
+      canvas.requestRenderAll();
+    }
+    return url;
+  }
+
   function renderWarpPreview() {
     const previewCanvas = document.getElementById('warp-preview-canvas');
     if (! previewCanvas || ! canvas) return;
-    const pctx = previewCanvas.getContext('2d');
-    const pw = previewCanvas.width;
-    const ph = previewCanvas.height;
 
-    // Capture the design layer alone (excludeFromExport guides are skipped by
-    // toDataURL automatically; we hide the mug bg to isolate user content).
-    // try/finally guarantees the bg is restored even if toDataURL throws on a
-    // tainted canvas — otherwise the mug would silently disappear forever.
     const origBg = canvas.backgroundImage;
-    let designUrl = '';
-    try {
-      canvas.backgroundImage = null;
-      designUrl = canvas.toDataURL({ format: 'png', multiplier: 1 });
-    } catch (err) {
-      console.warn('[MugCustomizer] warp preview skipped:', err && err.message);
-      return;
-    } finally {
-      canvas.backgroundImage = origBg;
-      canvas.requestRenderAll();
-    }
+    const designUrl = _captureDesignLayer(1);
+    if (! designUrl) return;
+
+    const mugEl = origBg && origBg._element;
+    if (! mugEl) return;
+    // After applyFilters(), _element becomes a <canvas> (no naturalWidth).
+    // Fall back to cached dims captured at load time.
+    const natW = _mugNaturalW || mugEl.naturalWidth || mugEl.width  || 0;
+    const natH = _mugNaturalH || mugEl.naturalHeight || mugEl.height || 0;
+    if (! natW || ! natH) return;
+
+    const pa = getPrintAreaPx();
 
     const designImg = new Image();
     designImg.onload = function () {
-      pctx.clearRect(0, 0, pw, ph);
-
-      // Fit the mug image into the preview canvas (preserve aspect).
-      // After applyFilters(), Fabric swaps _element from <img> to a <canvas>,
-      // which has no naturalWidth/naturalHeight — fall back to cached natural
-      // dims and then to element width/height so we never divide by zero.
-      const mugEl = origBg && origBg._element;
-      if (! mugEl) return;
-      const natW = _mugNaturalW || mugEl.naturalWidth || mugEl.width  || 0;
-      const natH = _mugNaturalH || mugEl.naturalHeight || mugEl.height || 0;
-      if (! natW || ! natH) return;
-      const fit = Math.min(pw / natW, ph / natH);
-      const drawW = natW * fit;
-      const drawH = natH * fit;
-      const drawX = (pw - drawW) / 2;
-      const drawY = (ph - drawH) / 2;
-      pctx.drawImage(mugEl, drawX, drawY, drawW, drawH);
-
-      // Translate the print area from main-canvas px → preview px
-      const pa = getPrintAreaPx();
-      const cw = canvas.getWidth();
-      const k = drawW / cw;                 // shared scale factor for both axes
-      const paLeft   = drawX + pa.left   * k;
-      const paTop    = drawY + pa.top    * k;
-      const paWidth  = pa.width  * k;
-      const paHeight = pa.height * k;
-
-      // Cylindrical sweep
-      const halfWrap = ((pa.wrapDeg || 140) * Math.PI) / 360; // half arc, radians
-      const sinHalf  = Math.sin(halfWrap);
-      const cols     = Math.max(1, Math.round(paWidth));
-      const srcW     = pa.width;             // sample from main-canvas-resolution design
-      const srcH     = pa.height;
-      const srcLeft  = pa.left;
-      const srcTop   = pa.top;
-      const center   = cols / 2;
-
-      for (let ox = 0; ox < cols; ox++) {
-        const norm  = (ox - center) / center;             // -1 .. +1
-        const theta = Math.asin(Math.max(-1, Math.min(1, norm * sinHalf)));
-        const srcCol = ((theta / (2 * halfWrap)) + 0.5) * srcW;
-        try {
-          pctx.drawImage(
-            designImg,
-            srcLeft + srcCol, srcTop, 1, srcH,
-            paLeft + ox,      paTop, 1, paHeight
-          );
-        } catch (e) { /* out-of-bounds source column — skip */ }
+      // ── Main preview (selected angle) ───────────────────────────────────
+      const pctx = previewCanvas.getContext('2d');
+      if (_activeAngleDeg === -999) {
+        renderDonutView(pctx, previewCanvas.width, previewCanvas.height, designImg, pa);
+      } else {
+        renderAngleView(pctx, previewCanvas.width, previewCanvas.height,
+                        designImg, mugEl, natW, natH, pa, _activeAngleDeg);
       }
+
+      // ── Thumb strip — render every angle view ────────────────────────
+      document.querySelectorAll('#angle-strip .angle-thumb').forEach(function (thumb) {
+        var thumbCv = thumb.querySelector('canvas');
+        if (! thumbCv) return;
+        var tCtx = thumbCv.getContext('2d');
+        if (thumb.dataset.isDonut === 'true') {
+          renderDonutView(tCtx, thumbCv.width, thumbCv.height, designImg, pa);
+        } else {
+          renderAngleView(tCtx, thumbCv.width, thumbCv.height,
+                          designImg, mugEl, natW, natH, pa,
+                          parseFloat(thumb.dataset.angle || '0'));
+        }
+      });
     };
     designImg.src = designUrl;
   }
 
+  // ── Per-angle cylindrical renderer ──────────────────────────────────────
+  //
+  // Projects the flat design onto a cylinder viewed from `viewAngleDeg`
+  // degrees away from the mug's front face.
+  //
+  // Math (one pass, column by column):
+  //   norm  = (ox - center) / center          → −1 … +1 across output width
+  //   theta = viewRad + asin(norm × sin(viewHalf))
+  //           └─ actual cylinder angle that maps to output column ox
+  //   t     = theta / (2 × halfWrap) + 0.5   → 0=left edge, 1=right edge of design
+  //   srcCol = t × srcW + srcLeft             → source column in flat design
+  //
+  // Columns where t < 0 or t > 1 are outside the print area — just mug bg.
+  // Foreshortening is implicit: asin stretches centre columns and compresses
+  // the edges, matching how a cylinder appears from an angle.
+  function renderAngleView(ctx, pw, ph, designImg, mugEl, natW, natH, pa, viewAngleDeg) {
+    ctx.clearRect(0, 0, pw, ph);
+
+    // Draw mug background, fit-scaled to this canvas
+    var fit   = Math.min(pw / natW, ph / natH);
+    var drawW = natW * fit;
+    var drawH = natH * fit;
+    var drawX = (pw - drawW) / 2;
+    var drawY = (ph - drawH) / 2;
+    ctx.drawImage(mugEl, drawX, drawY, drawW, drawH);
+
+    // Scale print-area coords (main canvas px) → preview canvas px
+    var cw      = canvas.getWidth();
+    var k       = drawW / cw;
+    var paLeft  = drawX + pa.left  * k;
+    var paTop   = drawY + pa.top   * k;
+    var paWidth = pa.width  * k;
+    var paHeight= pa.height * k;
+
+    var halfWrap     = ((pa.wrapDeg || 140) * Math.PI) / 360;
+    var viewHalf     = VIEW_HALF_DEG * Math.PI / 180;
+    var viewRad      = viewAngleDeg  * Math.PI / 180;
+    var sinViewHalf  = Math.sin(viewHalf);
+    var cols         = Math.max(1, Math.round(paWidth));
+    var center       = cols / 2;
+    var srcW         = pa.width;
+    var srcH         = pa.height;
+    var srcLeft      = pa.left;
+    var srcTop       = pa.top;
+
+    for (var ox = 0; ox < cols; ox++) {
+      var norm  = (ox - center) / center;
+      var theta = viewRad + Math.asin(Math.max(-1, Math.min(1, norm * sinViewHalf)));
+      var t     = theta / (2 * halfWrap) + 0.5;
+      if (t < 0 || t > 1) continue;  // outside print area
+      var srcCol = srcLeft + t * srcW;
+      try {
+        ctx.drawImage(designImg, srcCol, srcTop, 1, srcH,
+                                 paLeft + ox, paTop, 1, paHeight);
+      } catch (e) { /* clipped source rect — skip */ }
+    }
+  }
+
+  // ── Active angle tracker ─────────────────────────────────────────────────
+  //
+  // Maps the selected object's horizontal centre → cylinder angle →
+  // closest PREVIEW_ANGLES entry. Updates the strip highlight and main label
+  // so the user sees which angle view best shows their design's position.
+  function updateActiveAngle() {
+    var obj = canvas.getActiveObject();
+    if (! obj) return;
+    var pa = getPrintAreaPx();
+    var b  = obj.getBoundingRect(true);
+    var objCX = b.left + b.width / 2;
+
+    // t=0 → left edge of print area, t=1 → right edge
+    var t             = (objCX - pa.left) / (pa.width || 1);
+    var designAngleDeg = (t - 0.5) * (pa.wrapDeg || 140);
+
+    // Find the closest angle in the strip (skip Donut — top-down, not lateral)
+    var closest = PREVIEW_ANGLES[2];  // default Center
+    var minDist = Infinity;
+    PREVIEW_ANGLES.forEach(function (v) {
+      if (v.isDonut) return;
+      var d = Math.abs(v.deg - designAngleDeg);
+      if (d < minDist) { minDist = d; closest = v; }
+    });
+
+    if (closest.deg === _activeAngleDeg) return;  // no change — skip DOM work
+    _activeAngleDeg = closest.deg;
+
+    var label = document.getElementById('preview-angle-label');
+    if (label) label.textContent = closest.label;
+
+    document.querySelectorAll('#angle-strip .angle-thumb').forEach(function (th) {
+      th.classList.toggle('active', parseFloat(th.dataset.angle) === closest.deg);
+    });
+  }
+
   // Backwards-compat shim: any old call sites will still work.
   function updateMiniPreview() { scheduleWarpPreview(); }
+
+  // ── Donut (top-down) view renderer ───────────────────────────────────────
+  //
+  // Projects the flat design around an elliptical ring representing the mug
+  // viewed from above. Each slice of the ring samples a column of the flat
+  // design, rotated radially to fill the annular band.
+  function renderDonutView(ctx, pw, ph, designImg, pa) {
+    ctx.clearRect(0, 0, pw, ph);
+
+    var cx = pw / 2;
+    var cy = ph / 2;
+    var outerR = Math.min(pw, ph) * 0.42;
+    var innerR = outerR * 0.54;
+    var N = Math.min(240, Math.ceil(2 * Math.PI * outerR));
+
+    // Mug body background
+    ctx.save();
+    ctx.fillStyle = '#d8d8d8';
+    ctx.beginPath();
+    ctx.arc(cx, cy, outerR + 1, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.restore();
+
+    // Map design as a band around the outer ring
+    for (var i = 0; i < N; i++) {
+      var t  = i / N;
+      var a1 = t * 2 * Math.PI - Math.PI / 2;
+      var a2 = (i + 1) / N * 2 * Math.PI - Math.PI / 2;
+      var srcX = Math.round(pa.left + t * pa.width);
+      var radLen = outerR - innerR;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, outerR, a1, a2);
+      ctx.arc(cx, cy, innerR, a2, a1, true);
+      ctx.closePath();
+      ctx.clip();
+
+      var midA = (a1 + a2) / 2;
+      ctx.translate(cx + innerR * Math.cos(midA), cy + innerR * Math.sin(midA));
+      ctx.rotate(midA + Math.PI / 2);
+      try {
+        ctx.drawImage(designImg, srcX, pa.top, 1, Math.max(1, pa.height),
+                      0, 0, radLen, radLen);
+      } catch (e) {}
+      ctx.restore();
+    }
+
+    // Inner circle (mug interior / top face)
+    ctx.save();
+    ctx.fillStyle = '#b8b8b8';
+    ctx.beginPath();
+    ctx.arc(cx, cy, innerR - 1, 0, 2 * Math.PI);
+    ctx.fill();
+    var grad = ctx.createRadialGradient(cx - innerR * 0.25, cy - innerR * 0.25, 0, cx, cy, innerR);
+    grad.addColorStop(0, 'rgba(255,255,255,0.28)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.08)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, innerR - 1, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.restore();
+
+    // Subtle rim outline
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, outerR, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // ── Full Preview Modal (Zazzle-style) ─────────────────────────────────────
+  function openPreviewModal() {
+    var modal = document.getElementById('preview-modal');
+    if (!modal) return;
+    modal.classList.add('open');
+    _renderFullPreview(modal);
+  }
+
+  function closePreviewModal() {
+    var modal = document.getElementById('preview-modal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  function _renderFullPreview(modal) {
+    var origBg    = canvas.backgroundImage;
+    var designUrl = _captureDesignLayer(1);
+    var mugEl     = origBg && origBg._element;
+    if (!designUrl) return;
+    var natW = _mugNaturalW || (mugEl && (mugEl.naturalWidth  || mugEl.width))  || 0;
+    var natH = _mugNaturalH || (mugEl && (mugEl.naturalHeight || mugEl.height)) || 0;
+    var pa   = getPrintAreaPx();
+
+    var designImg = new Image();
+    designImg.onload = function () {
+      // Render all modal thumbnails
+      modal.querySelectorAll('.preview-modal-thumb').forEach(function (thumb) {
+        var cv = thumb.querySelector('canvas');
+        if (!cv) return;
+        var tCtx = cv.getContext('2d');
+        if (thumb.dataset.isDonut === 'true') {
+          renderDonutView(tCtx, cv.width, cv.height, designImg, pa);
+        } else {
+          renderAngleView(tCtx, cv.width, cv.height, designImg, mugEl,
+                          natW, natH, pa, parseFloat(thumb.dataset.angle || '0'));
+        }
+      });
+
+      // Render main canvas for currently active thumb
+      _renderModalMainCanvas(modal, designImg, mugEl, natW, natH, pa);
+    };
+    designImg.src = designUrl;
+  }
+
+  function _renderModalMainCanvas(modal, designImg, mugEl, natW, natH, pa) {
+    var mainCv = document.getElementById('preview-modal-canvas');
+    if (!mainCv) return;
+    var mCtx = mainCv.getContext('2d');
+    var active = modal.querySelector('.preview-modal-thumb.active');
+    if (active && active.dataset.isDonut === 'true') {
+      renderDonutView(mCtx, mainCv.width, mainCv.height, designImg, pa);
+    } else {
+      var deg = active ? parseFloat(active.dataset.angle || '0') : 0;
+      renderAngleView(mCtx, mainCv.width, mainCv.height, designImg, mugEl,
+                      natW, natH, pa, deg);
+    }
+  }
 
   // ── Print Export — design-only at production DPI ─────────────────────────
   //
@@ -730,6 +963,8 @@
     const mult = (dim.h * TARGET_DPI) / Math.max(1, pa.height);
 
     const origBg = canvas.backgroundImage;
+    const guides = canvas.getObjects().filter(function (o) { return o.excludeFromExport; });
+    guides.forEach(function (g) { g.visible = false; });
     let url = '';
     try {
       canvas.backgroundImage = null;
@@ -746,6 +981,7 @@
       console.warn('[MugCustomizer] print export skipped:', err && err.message);
     } finally {
       canvas.backgroundImage = origBg;
+      guides.forEach(function (g) { g.visible = true; });
       canvas.requestRenderAll();
     }
     return {
@@ -855,8 +1091,6 @@
   }
 
   // ── Canvas Events ─────────────────────────────────────────────────────────
-  let _boundaryWarningTimer = null;
-
   function bindCanvasEvents() {
     canvas.on('object:added',    function () { if (!isHistoryLock) pushHistory(); updateMiniPreview(); updateLayerPanel(); setSaveStatus('● Unsaved', '#f59e0b'); });
     canvas.on('object:modified', function () { if (!isHistoryLock) pushHistory(); updateMiniPreview(); updateLayerPanel(); setSaveStatus('● Unsaved', '#f59e0b'); });
@@ -866,15 +1100,12 @@
     canvas.on('selection:updated', function (e) { showContextBar(e.selected[0]); updateLayerPanel(); });
     canvas.on('selection:cleared', function ()  { hideContextBar(); updateLayerPanel(); });
 
-    // C5 — boundary warning + M13 snap guides + live warp preview on drag/scale.
-    // Zazzle parity: the cylindrical preview must follow every pointer move,
-    // not wait for object:modified (which only fires on mouse release).
-    // updateMiniPreview() funnels into scheduleWarpPreview() which is RAF-
-    // coalesced, so calling it on every mousemove is cheap.
-    canvas.on('object:moving',   function (e) { checkBoundary(e); snapGuides(e); updateMiniPreview(); });
-    canvas.on('object:scaling',  function (e) { checkBoundary(e); updateMiniPreview(); });
-    canvas.on('object:rotating', function ()  { updateMiniPreview(); });
-    canvas.on('object:modified', function () { clearGuides(); });
+    // Free drag/scale/rotate — no snapping, no hard clamp.
+    // A soft toast fires once when the design leaves the print area.
+    canvas.on('object:moving',   function (e) { updateMiniPreview(); updateActiveAngle(); warnIfOutside(e.target); });
+    canvas.on('object:scaling',  function (e) { updateMiniPreview(); updateActiveAngle(); });
+    canvas.on('object:rotating', function (e) { updateMiniPreview(); });
+    canvas.on('object:modified', function ()  { clearGuides(); });
 
     // C7 — scroll-wheel zoom
     canvas.on('mouse:wheel', function (opt) {
@@ -930,26 +1161,61 @@
     });
   }
 
-  function checkBoundary(e) {
-    const pa  = getPrintAreaPx();
-    const obj = e.target;
-    const b   = obj.getBoundingRect(true);
-    const outside = b.left < pa.left || b.top < pa.top ||
-                    b.left + b.width > pa.left + pa.width ||
-                    b.top  + b.height > pa.top  + pa.height;
+  // ── Print-area hard constraints (Zazzle parity) ──────────────────────────
+  //
+  // Why AABB and not obj.left / obj.top?
+  // obj.left/top are the untransformed origin. After rotation the visual extent
+  // is larger — clamping the origin alone lets corners escape the boundary.
+  // getBoundingRect(true) returns the axis-aligned bounding box in absolute
+  // canvas coordinates after all transforms. Shifting obj.left/top by the
+  // overflow delta moves the AABB by exactly the same amount — rotation-safe.
 
-    if (printAreaRect) {
-      printAreaRect.set({ stroke: outside ? '#dc2626' : '#4caf50' });
-      canvas.requestRenderAll();
-    }
+  function constrainToPrintArea(obj) {
+    var pa = getPrintAreaPx();
+    var b  = obj.getBoundingRect(true);  // AABB after all transforms
 
-    if (outside) {
-      clearTimeout(_boundaryWarningTimer);
-      _boundaryWarningTimer = setTimeout(function () {
-        showToast('⚠️ Part of your design is outside the print area');
-        if (printAreaRect) { printAreaRect.set({ stroke: '#4caf50' }); canvas.requestRenderAll(); }
-      }, 600);
+    var dx = 0, dy = 0;
+    if (b.left < pa.left)                              dx =  pa.left               - b.left;
+    if (b.top  < pa.top)                               dy =  pa.top                - b.top;
+    if (b.left + b.width  > pa.left + pa.width)        dx = (pa.left + pa.width)   - (b.left + b.width);
+    if (b.top  + b.height > pa.top  + pa.height)       dy = (pa.top  + pa.height)  - (b.top  + b.height);
+
+    if (dx || dy) {
+      obj.left += dx;
+      obj.top  += dy;
+      obj.setCoords();
     }
+  }
+
+  // Clamp scale so the AABB never exceeds print-area dimensions, then
+  // re-run position clamp (scaling from a corner can push a side outside).
+  function constrainScale(obj) {
+    var pa = getPrintAreaPx();
+    var b  = obj.getBoundingRect(true);
+
+    if (b.width > pa.width || b.height > pa.height) {
+      var ratio = Math.min(pa.width / b.width, pa.height / b.height);
+      obj.scaleX *= ratio;
+      obj.scaleY *= ratio;
+      obj.setCoords();
+    }
+    constrainToPrintArea(obj);
+  }
+
+  // Soft out-of-bounds warning — fires once per drag gesture when the object
+  // leaves the print area. No clamping; user retains full drag freedom.
+  var _outsideWarned = false;
+  function warnIfOutside(obj) {
+    var pa = getPrintAreaPx();
+    var b  = obj.getBoundingRect(true);
+    var outside = b.left < pa.left || b.top < pa.top ||
+                  b.left + b.width  > pa.left + pa.width ||
+                  b.top  + b.height > pa.top  + pa.height;
+    if (outside && !_outsideWarned) {
+      _outsideWarned = true;
+      showToast('Part of your design is outside the print area.');
+    }
+    if (!outside) _outsideWarned = false;
   }
 
   // ── Snap Guides (M13) ────────────────────────────────────────────────────
@@ -1024,6 +1290,19 @@
 
   // ── UI Event Bindings ─────────────────────────────────────────────────────
   function bindUI() {
+    // Angle-strip thumbnail click → switch main preview to that view angle
+    document.querySelectorAll('#angle-strip .angle-thumb').forEach(function (thumb) {
+      thumb.addEventListener('click', function () {
+        _activeAngleDeg = parseFloat(this.dataset.angle || '0');
+        document.querySelectorAll('#angle-strip .angle-thumb')
+          .forEach(function (t) { t.classList.remove('active'); });
+        this.classList.add('active');
+        var lbl = document.getElementById('preview-angle-label');
+        if (lbl) lbl.textContent = this.dataset.label || '';
+        scheduleWarpPreview();
+      });
+    });
+
     // Tool rail
     const toolText    = document.getElementById('tool-text');
     const toolUploads = document.getElementById('tool-uploads');
@@ -1286,6 +1565,53 @@
         document.querySelectorAll('.color-swatch').forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
         updateVariant('color', btn.dataset.color);
+      });
+    });
+
+    // ── Full Preview Modal bindings ─────────────────────────────────────────
+    var previewBtn   = document.getElementById('btn-preview');
+    var previewModal = document.getElementById('preview-modal');
+    var pmClose      = document.getElementById('preview-modal-close');
+    var pmLabel      = document.getElementById('preview-modal-label');
+    var pmCanvas     = document.getElementById('preview-modal-canvas');
+
+    if (previewBtn)   previewBtn.addEventListener('click', openPreviewModal);
+    if (pmClose)      pmClose.addEventListener('click', closePreviewModal);
+    if (previewModal) {
+      previewModal.addEventListener('click', function (e) {
+        if (e.target === previewModal) closePreviewModal();
+      });
+    }
+
+    // Thumbnail clicks inside preview modal
+    document.querySelectorAll('.preview-modal-thumb').forEach(function (thumb) {
+      thumb.addEventListener('click', function () {
+        document.querySelectorAll('.preview-modal-thumb')
+          .forEach(function (t) { t.classList.remove('active'); });
+        thumb.classList.add('active');
+        if (pmLabel) pmLabel.textContent = thumb.dataset.label || '';
+
+        // Re-render main modal canvas for newly selected view
+        var origBg = canvas.backgroundImage;
+        var dUrl   = _captureDesignLayer(1);
+        if (!dUrl) return;
+        var mugEl2 = origBg && origBg._element;
+        var natW2  = _mugNaturalW || (mugEl2 && (mugEl2.naturalWidth  || mugEl2.width))  || 0;
+        var natH2  = _mugNaturalH || (mugEl2 && (mugEl2.naturalHeight || mugEl2.height)) || 0;
+        var pa2    = getPrintAreaPx();
+
+        var dImg = new Image();
+        dImg.onload = function () {
+          if (!pmCanvas) return;
+          var mCtx = pmCanvas.getContext('2d');
+          if (thumb.dataset.isDonut === 'true') {
+            renderDonutView(mCtx, pmCanvas.width, pmCanvas.height, dImg, pa2);
+          } else {
+            renderAngleView(mCtx, pmCanvas.width, pmCanvas.height, dImg, mugEl2,
+                            natW2, natH2, pa2, parseFloat(thumb.dataset.angle || '0'));
+          }
+        };
+        dImg.src = dUrl;
       });
     });
 
