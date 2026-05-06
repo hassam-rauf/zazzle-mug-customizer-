@@ -15,9 +15,9 @@ class Mug_Customizer_Variant_Resolver {
      * and the production print file size.
      */
     private const DEFAULT_PRINT_AREAS = [
-        // Tuned to the bundled placeholder-mug-white.svg (2000x2000 reference)
-        'classic-11oz'  => ['x' => 500, 'y' => 700, 'width' => 800, 'height' => 750, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
-        'classic-15oz'  => ['x' => 510, 'y' => 730, 'width' => 870, 'height' => 780, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
+        // Canvas 720x420 — Zazzle-parity: mug ~66% canvas height left-aligned. Print area is wide landscape (~2.95:1) starting at mug body left edge (overlapping visible face) and extending right showing the unrolled wrap. Matches Zazzle's ~2.58:1 safe + 2.31:1 bleed pill.
+        'classic-11oz'  => ['x' => 115, 'y' => 100, 'width' => 590, 'height' => 200, 'pngWidth' => 720, 'pngHeight' => 420, 'wrapDeg' => 140],
+        'classic-15oz'  => ['x' => 115, 'y' => 90,  'width' => 590, 'height' => 220, 'pngWidth' => 720, 'pngHeight' => 420, 'wrapDeg' => 140],
         'travel-11oz'   => ['x' => 560, 'y' => 700, 'width' => 760, 'height' => 800, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 130],
         'travel-15oz'   => ['x' => 540, 'y' => 670, 'width' => 800, 'height' => 860, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 130],
         'espresso-11oz' => ['x' => 560, 'y' => 820, 'width' => 760, 'height' => 600, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
@@ -26,7 +26,7 @@ class Mug_Customizer_Variant_Resolver {
         'two-tone-15oz' => ['x' => 510, 'y' => 730, 'width' => 870, 'height' => 780, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
 
         // Style-only fallbacks (used when size is missing)
-        'classic'  => ['x' => 500, 'y' => 700, 'width' => 800, 'height' => 750, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
+        'classic'  => ['x' => 115, 'y' => 100, 'width' => 590, 'height' => 200, 'pngWidth' => 720, 'pngHeight' => 420, 'wrapDeg' => 140],
         'travel'   => ['x' => 560, 'y' => 700, 'width' => 760, 'height' => 800, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 130],
         'espresso' => ['x' => 560, 'y' => 820, 'width' => 760, 'height' => 600, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
         'two-tone' => ['x' => 530, 'y' => 760, 'width' => 830, 'height' => 700, 'pngWidth' => 2000, 'pngHeight' => 2000, 'wrapDeg' => 140],
@@ -42,8 +42,7 @@ class Mug_Customizer_Variant_Resolver {
         if (isset($map[$variant_key])) {
             return $map[$variant_key];
         }
-        // Transparent vector placeholder until the client supplies real PNGs.
-        return MUG_CUSTOMIZER_PLUGIN_URL . 'public/assets/images/placeholder-mug-white.svg';
+        return MUG_CUSTOMIZER_PLUGIN_URL . 'public/assets/images/mug-classic-white.png';
     }
 
     public function get_print_area_config(int $product_id): array {

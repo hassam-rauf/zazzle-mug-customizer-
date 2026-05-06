@@ -3,7 +3,7 @@
  * Plugin Name: Mug Customizer
  * Plugin URI:  https://example.com/mug-customizer
  * Description: Zazzle-like mug customizer for WooCommerce. Shoppers design custom mugs with text and images, then add to cart with 300 DPI print file generation.
- * Version:     1.0.0
+ * Version:     1.8.0
  * Author:      Hassam Rauf
  * License:     GPL-2.0+
  * Text Domain: mug-customizer
@@ -16,7 +16,7 @@
 defined('ABSPATH') || exit;
 
 // ── Constants ────────────────────────────────────────────────────────────────
-define('MUG_CUSTOMIZER_VERSION',        '1.1.5');
+define('MUG_CUSTOMIZER_VERSION',        '1.8.0');
 define('MUG_CUSTOMIZER_PLUGIN_FILE',    __FILE__);
 define('MUG_CUSTOMIZER_PLUGIN_DIR',     plugin_dir_path(__FILE__));
 define('MUG_CUSTOMIZER_PLUGIN_URL',     plugin_dir_url(__FILE__));
