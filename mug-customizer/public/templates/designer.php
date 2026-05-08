@@ -46,7 +46,7 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
     <nav class="topbar-tabs" aria-label="<?php esc_attr_e('Design steps', 'mug-customizer'); ?>">
       <span class="tab active" data-tab="design" role="link" tabindex="0" aria-current="step"><?php esc_html_e('Design', 'mug-customizer'); ?></span>
       <span class="tab" data-tab="options" role="link" tabindex="0"><?php esc_html_e('Options', 'mug-customizer'); ?></span>
-      <a href="<?php echo esc_url($review_url); ?>" class="tab" data-tab="review" id="review-tab-link"><?php esc_html_e('Review', 'mug-customizer'); ?></a>
+      <span class="tab" data-tab="review" role="link" tabindex="0" id="review-tab-link"><?php esc_html_e('Review', 'mug-customizer'); ?></span>
     </nav>
 
     <!-- RIGHT zone -->
@@ -75,66 +75,142 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
   <!-- ── Canvas Stage (full area, all panels float inside) ──────────────── -->
   <div id="canvas-stage">
 
-    <!-- Text Context Bar (shows when text object selected) — Zazzle style -->
-    <div id="context-bar" style="display:none;">
-      <!-- Primary row: Edit text | Font | Size — val + | Color | B I U | Align | Delete | More -->
+    <!-- Text Context Bar (shows when text object selected) — Zazzle floating pill style -->
+    <div id="context-bar" data-anchor="below">
+      <span class="ctx-notch" aria-hidden="true"></span>
+
       <button type="button" id="ctx-edit-text" class="ctx-edit-text-btn" title="<?php esc_attr_e('Enter edit mode', 'mug-customizer'); ?>"><?php esc_html_e('Edit text', 'mug-customizer'); ?></button>
       <div class="ctx-sep"></div>
 
-      <span class="ctx-label"><?php esc_html_e('Font:', 'mug-customizer'); ?></span>
-      <select id="ctx-font" title="Font family">
-        <option value="Georgia">Georgia</option>
-        <option value="Roboto">Roboto</option>
-        <option value="Montserrat">Montserrat</option>
-        <option value="Oswald">Oswald</option>
-        <option value="Dancing Script">Dancing Script</option>
-        <option value="Arial">Arial</option>
-        <option value="Times New Roman">Times New Roman</option>
-      </select>
+      <div class="ctx-font-group" title="<?php esc_attr_e('Font family', 'mug-customizer'); ?>">
+        <span class="ctx-label"><?php esc_html_e('Font:', 'mug-customizer'); ?></span>
+        <span id="ctx-font-preview" class="ctx-font-preview" style="font-family:Georgia;">Georgia</span>
+        <select id="ctx-font" class="ctx-font-select" title="Font family">
+          <option value="Georgia"           style="font-family:Georgia;">Georgia</option>
+          <option value="Roboto"            style="font-family:Roboto;">Roboto</option>
+          <option value="Montserrat"        style="font-family:Montserrat;">Montserrat</option>
+          <option value="Oswald"            style="font-family:Oswald;">Oswald</option>
+          <option value="Dancing Script"    style="font-family:'Dancing Script';">Dancing Script</option>
+          <option value="Arial"             style="font-family:Arial;">Arial</option>
+          <option value="Times New Roman"   style="font-family:'Times New Roman';">Times New Roman</option>
+        </select>
+      </div>
       <div class="ctx-sep"></div>
 
       <span class="ctx-label"><?php esc_html_e('Font size', 'mug-customizer'); ?></span>
       <div class="ctx-size-group">
-        <button type="button" id="ctx-size-minus" title="Decrease size">−</button>
-        <span id="ctx-size-val">24</span>
-        <button type="button" id="ctx-size-plus"  title="Increase size">+</button>
+        <button type="button" id="ctx-size-minus" class="ctx-size-step" title="Decrease size">&minus;</button>
+        <input type="number" id="ctx-size-input" class="ctx-size-input" value="24" min="6" max="200" step="0.01" title="Font size">
+        <button type="button" id="ctx-size-plus"  class="ctx-size-step" title="Increase size">+</button>
       </div>
       <div class="ctx-sep"></div>
 
-      <input type="color" id="ctx-color" value="#222222" title="<?php esc_attr_e('Text color', 'mug-customizer'); ?>">
+      <span class="ctx-color-wrap" title="<?php esc_attr_e('Text color', 'mug-customizer'); ?>">
+        <input type="color" id="ctx-color" value="#222222">
+      </span>
       <div class="ctx-sep"></div>
 
-      <button type="button" id="ctx-bold"      title="<?php esc_attr_e('Bold', 'mug-customizer'); ?>"><strong>B</strong></button>
-      <button type="button" id="ctx-italic"    title="<?php esc_attr_e('Italic', 'mug-customizer'); ?>"><em>I</em></button>
-      <button type="button" id="ctx-underline" title="<?php esc_attr_e('Underline', 'mug-customizer'); ?>"><u>U</u></button>
+      <button type="button" id="ctx-bold"   class="ctx-icon-btn" title="<?php esc_attr_e('Bold', 'mug-customizer'); ?>"><strong>B</strong></button>
+      <button type="button" id="ctx-italic" class="ctx-icon-btn" title="<?php esc_attr_e('Italic', 'mug-customizer'); ?>"><em>I</em></button>
       <div class="ctx-sep"></div>
 
-      <span class="ctx-label"><?php esc_html_e('Alignment', 'mug-customizer'); ?></span>
-      <select id="ctx-align-select" title="<?php esc_attr_e('Text alignment', 'mug-customizer'); ?>" class="ctx-align-select">
-        <option value="left">&#8676; <?php esc_html_e('Left', 'mug-customizer'); ?></option>
-        <option value="center">&#8801; <?php esc_html_e('Center', 'mug-customizer'); ?></option>
-        <option value="right">&#8677; <?php esc_html_e('Right', 'mug-customizer'); ?></option>
-      </select>
+      <button type="button" id="ctx-spacing-toggle" class="ctx-icon-btn ctx-with-chevron" title="<?php esc_attr_e('Line & letter spacing', 'mug-customizer'); ?>" aria-haspopup="true" aria-expanded="false">
+        <span class="ctx-3lines" aria-hidden="true">&#9776;</span><span class="ctx-chevron" aria-hidden="true">&#9662;</span>
+      </button>
+      <div id="ctx-spacing-panel" class="ctx-popover" hidden>
+        <label class="ctx-popover-row">
+          <span class="ctx-popover-label"><?php esc_html_e('Letter spacing', 'mug-customizer'); ?></span>
+          <input type="range" id="ctx-spacing" min="-200" max="800" value="0" step="10">
+        </label>
+        <label class="ctx-popover-row">
+          <span class="ctx-popover-label"><?php esc_html_e('Line height', 'mug-customizer'); ?></span>
+          <input type="range" id="ctx-lineheight" min="50" max="300" value="120" step="5">
+        </label>
+      </div>
       <div class="ctx-sep"></div>
 
-      <button type="button" id="ctx-delete" title="<?php esc_attr_e('Delete', 'mug-customizer'); ?>" class="ctx-delete-btn">&#x1F5D1;</button>
+      <button type="button" id="ctx-delete" class="ctx-icon-btn ctx-delete-btn" title="<?php esc_attr_e('Delete', 'mug-customizer'); ?>">&#x1F5D1;</button>
+      <div class="ctx-sep"></div>
 
-      <!-- Overflow: advanced options hidden behind toggle -->
-      <button type="button" id="ctx-more-toggle" class="ctx-more-btn" title="<?php esc_attr_e('More options', 'mug-customizer'); ?>">&#9656;</button>
-      <div id="ctx-more-panel" style="display:none;" class="ctx-more-panel">
+      <div class="ctx-align-wrap" title="<?php esc_attr_e('Alignment', 'mug-customizer'); ?>">
+        <button type="button" id="ctx-align-toggle" class="ctx-align-trigger" aria-haspopup="true" aria-expanded="false">
+          <span class="ctx-label"><?php esc_html_e('Alignment', 'mug-customizer'); ?></span>
+          <span class="ctx-chevron" aria-hidden="true">&#9662;</span>
+        </button>
+        <div id="ctx-align-popover" class="ctx-popover ctx-align-popover" hidden>
+          <!-- Align section -->
+          <div class="ctx-pop-section">
+            <div class="ctx-pop-title"><?php esc_html_e('Align', 'mug-customizer'); ?></div>
+            <div class="ctx-align-grid">
+              <button type="button" class="ctx-pop-btn ctx-align-h" data-align="left"   title="<?php esc_attr_e('Align left', 'mug-customizer'); ?>"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="4" x2="4" y2="20"/><rect x="6" y="6.5" width="13" height="3" rx="0.5" fill="currentColor" stroke="none"/><rect x="6" y="14.5" width="9"  height="3" rx="0.5" fill="currentColor" stroke="none"/></svg></button>
+              <button type="button" class="ctx-pop-btn ctx-align-h" data-align="center" title="<?php esc_attr_e('Align center', 'mug-customizer'); ?>"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="12" y1="4" x2="12" y2="20"/><rect x="5.5" y="6.5" width="13" height="3" rx="0.5" fill="currentColor" stroke="none"/><rect x="7.5" y="14.5" width="9"  height="3" rx="0.5" fill="currentColor" stroke="none"/></svg></button>
+              <button type="button" class="ctx-pop-btn ctx-align-h" data-align="right"  title="<?php esc_attr_e('Align right', 'mug-customizer'); ?>"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="20" y1="4" x2="20" y2="20"/><rect x="5"  y="6.5" width="13" height="3" rx="0.5" fill="currentColor" stroke="none"/><rect x="9"  y="14.5" width="9"  height="3" rx="0.5" fill="currentColor" stroke="none"/></svg></button>
+              <button type="button" class="ctx-pop-btn ctx-align-v" data-align="top"    title="<?php esc_attr_e('Align top', 'mug-customizer'); ?>"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="4" x2="20" y2="4"/><rect x="6.5" y="6"  width="3" height="13" rx="0.5" fill="currentColor" stroke="none"/><rect x="14.5" y="6"  width="3" height="9"  rx="0.5" fill="currentColor" stroke="none"/></svg></button>
+              <button type="button" class="ctx-pop-btn ctx-align-v" data-align="middle" title="<?php esc_attr_e('Align middle', 'mug-customizer'); ?>"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="12" x2="20" y2="12"/><rect x="6.5" y="5.5" width="3" height="13" rx="0.5" fill="currentColor" stroke="none"/><rect x="14.5" y="7.5" width="3" height="9"  rx="0.5" fill="currentColor" stroke="none"/></svg></button>
+              <button type="button" class="ctx-pop-btn ctx-align-v" data-align="bottom" title="<?php esc_attr_e('Align bottom', 'mug-customizer'); ?>"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="20" x2="20" y2="20"/><rect x="6.5" y="5"  width="3" height="13" rx="0.5" fill="currentColor" stroke="none"/><rect x="14.5" y="9"  width="3" height="9"  rx="0.5" fill="currentColor" stroke="none"/></svg></button>
+            </div>
+          </div>
+
+          <div class="ctx-pop-row ctx-pop-row-2col">
+            <div class="ctx-pop-section">
+              <div class="ctx-pop-title"><?php esc_html_e('Distribute', 'mug-customizer'); ?></div>
+              <div class="ctx-pop-row">
+                <button type="button" class="ctx-pop-btn" id="ctx-distribute-h" title="<?php esc_attr_e('Stretch horizontally', 'mug-customizer'); ?>"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="2" y="6" width="3" height="12"/><rect x="10.5" y="6" width="3" height="12"/><rect x="19" y="6" width="3" height="12"/></svg></button>
+                <button type="button" class="ctx-pop-btn" id="ctx-distribute-v" title="<?php esc_attr_e('Stretch vertically', 'mug-customizer'); ?>"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="2" width="12" height="3"/><rect x="6" y="10.5" width="12" height="3"/><rect x="6" y="19" width="12" height="3"/></svg></button>
+              </div>
+            </div>
+            <div class="ctx-pop-section ctx-pop-divider-left">
+              <div class="ctx-pop-title"><?php esc_html_e('Align to', 'mug-customizer'); ?></div>
+              <label class="ctx-radio"><input type="radio" name="ctx-align-to" value="selection"><span><?php esc_html_e('Selection', 'mug-customizer'); ?></span></label>
+              <label class="ctx-radio"><input type="radio" name="ctx-align-to" value="artboard" checked><span><?php esc_html_e('Artboard', 'mug-customizer'); ?></span></label>
+            </div>
+          </div>
+
+          <hr class="ctx-pop-hr">
+
+          <div class="ctx-pop-row ctx-pop-row-2col">
+            <div class="ctx-pop-section">
+              <div class="ctx-pop-title"><?php esc_html_e('Flip', 'mug-customizer'); ?></div>
+              <div class="ctx-pop-row">
+                <button type="button" class="ctx-pop-btn" id="ctx-flip-h" title="<?php esc_attr_e('Flip horizontal', 'mug-customizer'); ?>"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><polygon points="10,6 4,12 10,18" fill="currentColor"/><polygon points="14,6 20,12 14,18"/><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 2"/></svg></button>
+                <button type="button" class="ctx-pop-btn" id="ctx-flip-v" title="<?php esc_attr_e('Flip vertical', 'mug-customizer'); ?>"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><polygon points="6,10 12,4 18,10" fill="currentColor"/><polygon points="6,14 12,20 18,14"/><line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="2 2"/></svg></button>
+              </div>
+            </div>
+            <div class="ctx-pop-section">
+              <div class="ctx-pop-title"><?php esc_html_e('Scale', 'mug-customizer'); ?></div>
+              <div class="ctx-pop-row">
+                <button type="button" class="ctx-pop-btn" id="ctx-scale-down" title="<?php esc_attr_e('Scale down', 'mug-customizer'); ?>">&minus;</button>
+                <button type="button" class="ctx-pop-btn" id="ctx-scale-up"   title="<?php esc_attr_e('Scale up', 'mug-customizer'); ?>">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="ctx-pop-section">
+            <div class="ctx-pop-title"><?php esc_html_e('Rotate', 'mug-customizer'); ?></div>
+            <div class="ctx-pop-row ctx-rotate-row">
+              <button type="button" class="ctx-pop-btn" id="ctx-rotate-ccw" title="<?php esc_attr_e('Rotate left', 'mug-customizer'); ?>"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 9 8 9"/></svg></button>
+              <div class="ctx-rotate-input-wrap">
+                <input type="number" id="ctx-rotate-input" value="0" min="-360" max="360" step="1" class="ctx-pop-input">
+                <span class="ctx-deg">&deg;</span>
+              </div>
+              <button type="button" class="ctx-pop-btn" id="ctx-rotate-cw" title="<?php esc_attr_e('Rotate right', 'mug-customizer'); ?>"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 4 21 9 16 9"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ctx-sep"></div>
+
+      <button type="button" id="ctx-effects-toggle" class="ctx-effects-btn" title="<?php esc_attr_e('Text effects', 'mug-customizer'); ?>">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.6-1.4-.4-.4-.6-.9-.6-1.4 0-1.1.9-2 2-2H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8z"/><circle cx="6.5" cy="11.5" r="1" fill="currentColor"/><circle cx="9.5"  cy="7"   r="1" fill="currentColor"/><circle cx="14.5" cy="7"   r="1" fill="currentColor"/><circle cx="17.5" cy="11.5" r="1" fill="currentColor"/></svg>
+        <span><?php esc_html_e('Effects', 'mug-customizer'); ?></span>
+      </button>
+
+      <button type="button" id="ctx-more-toggle" class="ctx-more-btn" title="<?php esc_attr_e('More options', 'mug-customizer'); ?>" aria-expanded="false">&#9656;</button>
+      <div id="ctx-more-panel" hidden class="ctx-more-panel">
         <label class="ctx-slider-label" title="Rotation angle">
           <span>&#8635;</span>
           <input type="number" id="ctx-angle" value="0" min="-360" max="360" step="1" style="width:46px;" title="Rotation (°)">
           <span>°</span>
-        </label>
-        <div class="ctx-sep"></div>
-        <label class="ctx-slider-label" title="Letter spacing">
-          <span>AV</span>
-          <input type="range" id="ctx-spacing" min="-200" max="800" value="0" step="10" style="width:60px;">
-        </label>
-        <label class="ctx-slider-label" title="Line height">
-          <span>&#8645;</span>
-          <input type="range" id="ctx-lineheight" min="50" max="300" value="120" step="5" style="width:60px;">
         </label>
         <div class="ctx-sep"></div>
         <input type="color" id="ctx-stroke-color" value="#000000" title="Stroke color">
@@ -148,13 +224,158 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
         <button type="button" id="ctx-duplicate"   title="Duplicate (Ctrl+D)">&#10697;</button>
       </div>
 
-      <!-- Hidden align buttons kept for JS compat, not displayed -->
+      <!-- Hidden legacy elements kept for JS compat -->
+      <button type="button" id="ctx-underline"    style="display:none;"></button>
       <button type="button" id="ctx-align-left"   style="display:none;"></button>
       <button type="button" id="ctx-align-center" style="display:none;"></button>
       <button type="button" id="ctx-align-right"  style="display:none;"></button>
-      <!-- Hidden number input kept so existing showContextBar JS still works -->
-      <input type="number" id="ctx-size" value="24" min="8" max="200" style="display:none;">
+      <input  type="number" id="ctx-size"         value="24" min="8" max="200" style="display:none;">
+      <span   id="ctx-size-val"                   style="display:none;">24</span>
+      <select id="ctx-align-select"               style="display:none;"><option value="left"></option><option value="center"></option><option value="right"></option></select>
     </div>
+
+    <!-- Effects flyout panel (Zazzle parity) — opens via toolbar Effects button -->
+    <aside id="effects-panel" class="floating-panel" hidden role="dialog" aria-labelledby="effects-panel-title">
+      <div class="panel-header">
+        <h3 id="effects-panel-title"><?php esc_html_e('Text Effects', 'mug-customizer'); ?></h3>
+        <button type="button" class="panel-close" id="effects-panel-close" aria-label="<?php esc_attr_e('Close', 'mug-customizer'); ?>">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+        </button>
+      </div>
+
+      <!-- Opacity -->
+      <section class="fx-section" data-section="opacity">
+        <header class="fx-section-header">
+          <span class="fx-section-title"><?php esc_html_e('Opacity', 'mug-customizer'); ?></span>
+          <span class="fx-section-chevron" aria-hidden="true">&#9662;</span>
+        </header>
+        <div class="fx-section-body">
+          <div class="fx-row">
+            <input type="range" id="fx-opacity" min="0" max="100" value="100" class="fx-slider">
+            <input type="number" id="fx-opacity-input" min="0" max="100" value="100" class="fx-num">
+          </div>
+        </div>
+      </section>
+
+      <!-- Tiling (UI scaffold; engine TBD in v1.1) -->
+      <section class="fx-section is-collapsed" data-section="tiling">
+        <header class="fx-section-header">
+          <span class="fx-section-title"><?php esc_html_e('Tiling', 'mug-customizer'); ?></span>
+          <span class="fx-section-chevron" aria-hidden="true">&#9662;</span>
+        </header>
+        <div class="fx-section-body">
+          <div class="fx-tile-grid">
+            <button type="button" class="fx-tile is-active" data-tiling="none"><div class="fx-tile-art"><span class="fx-tile-dot">&#10003;</span></div><span class="fx-tile-label"><?php esc_html_e('None', 'mug-customizer'); ?></span></button>
+            <button type="button" class="fx-tile" data-tiling="basic"><div class="fx-tile-art fx-tile-basic"><span>&#10003;</span><span>&#10003;</span><span>&#10003;</span><span>&#10003;</span></div><span class="fx-tile-label"><?php esc_html_e('Basic', 'mug-customizer'); ?></span></button>
+            <button type="button" class="fx-tile" data-tiling="halfbrick"><div class="fx-tile-art fx-tile-brick"><span>&#10003;</span><span>&#10003;</span><span>&#10003;</span><span>&#10003;</span><span>&#10003;</span><span>&#10003;</span></div><span class="fx-tile-label"><?php esc_html_e('Half Brick', 'mug-customizer'); ?></span></button>
+            <button type="button" class="fx-tile" data-tiling="halfdrop"><div class="fx-tile-art fx-tile-drop"><span>&#10003;</span><span>&#10003;</span><span>&#10003;</span><span>&#10003;</span><span>&#10003;</span><span>&#10003;</span></div><span class="fx-tile-label"><?php esc_html_e('Half Drop', 'mug-customizer'); ?></span></button>
+            <button type="button" class="fx-tile" data-tiling="mirror"><div class="fx-tile-art fx-tile-mirror"><span>&#10003;</span><span>&#10003;</span><span>&#9650;</span><span>&#9650;</span></div><span class="fx-tile-label"><?php esc_html_e('Mirror', 'mug-customizer'); ?></span></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Shadow -->
+      <section class="fx-section" data-section="shadow">
+        <header class="fx-section-header">
+          <span class="fx-section-title"><?php esc_html_e('Shadow', 'mug-customizer'); ?></span>
+          <span class="fx-section-chevron" aria-hidden="true">&#9662;</span>
+        </header>
+        <div class="fx-section-body">
+          <label class="fx-toggle-row">
+            <span id="fx-shadow-state"><?php esc_html_e('Text Shadow: off', 'mug-customizer'); ?></span>
+            <span class="fx-switch"><input type="checkbox" id="fx-shadow"><span class="fx-switch-track"></span></span>
+          </label>
+        </div>
+      </section>
+
+      <!-- Stroke -->
+      <section class="fx-section" data-section="stroke">
+        <header class="fx-section-header">
+          <span class="fx-section-title"><?php esc_html_e('Stroke', 'mug-customizer'); ?></span>
+          <span class="fx-section-chevron" aria-hidden="true">&#9662;</span>
+        </header>
+        <div class="fx-section-body">
+          <label class="fx-toggle-row">
+            <span id="fx-stroke-state"><?php esc_html_e('Text Stroke: off', 'mug-customizer'); ?></span>
+            <span class="fx-switch"><input type="checkbox" id="fx-stroke"><span class="fx-switch-track"></span></span>
+          </label>
+          <div class="fx-stroke-controls" hidden>
+            <div class="fx-row">
+              <span class="fx-mini-label"><?php esc_html_e('Color', 'mug-customizer'); ?></span>
+              <input type="color" id="fx-stroke-color" value="#000000" class="fx-color">
+            </div>
+            <div class="fx-row">
+              <span class="fx-mini-label"><?php esc_html_e('Width', 'mug-customizer'); ?></span>
+              <input type="range" id="fx-stroke-width" min="0" max="10" step="0.5" value="1" class="fx-slider">
+              <input type="number" id="fx-stroke-width-input" min="0" max="10" step="0.5" value="1" class="fx-num">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Line spacing -->
+      <section class="fx-section" data-section="linespacing">
+        <header class="fx-section-header">
+          <span class="fx-section-title"><?php esc_html_e('Line spacing', 'mug-customizer'); ?></span>
+          <span class="fx-section-chevron" aria-hidden="true">&#9662;</span>
+        </header>
+        <div class="fx-section-body">
+          <div class="fx-row">
+            <input type="range" id="fx-line-spacing" min="0.5" max="3" step="0.05" value="1" class="fx-slider">
+            <input type="number" id="fx-line-spacing-input" min="0.5" max="3" step="0.05" value="1" class="fx-num">
+          </div>
+        </div>
+      </section>
+
+      <!-- Letter spacing -->
+      <section class="fx-section" data-section="letterspacing">
+        <header class="fx-section-header">
+          <span class="fx-section-title"><?php esc_html_e('Letter spacing', 'mug-customizer'); ?></span>
+          <span class="fx-section-chevron" aria-hidden="true">&#9662;</span>
+        </header>
+        <div class="fx-section-body">
+          <div class="fx-row">
+            <input type="range" id="fx-letter-spacing" min="-200" max="800" step="10" value="0" class="fx-slider">
+            <input type="number" id="fx-letter-spacing-input" min="-200" max="800" step="10" value="0" class="fx-num">
+          </div>
+        </div>
+      </section>
+
+      <!-- Curved text (UI scaffold; engine TBD in v1.1) -->
+      <section class="fx-section is-collapsed" data-section="curved">
+        <header class="fx-section-header">
+          <span class="fx-section-title"><?php esc_html_e('Curved text', 'mug-customizer'); ?></span>
+          <span class="fx-section-chevron" aria-hidden="true">&#9662;</span>
+        </header>
+        <div class="fx-section-body">
+          <div class="fx-row">
+            <span class="fx-mini-label"><?php esc_html_e('Curve', 'mug-customizer'); ?></span>
+            <input type="range" id="fx-curve" min="-180" max="180" step="5" value="0" class="fx-slider">
+            <input type="number" id="fx-curve-input" min="-180" max="180" step="5" value="0" class="fx-num">
+          </div>
+        </div>
+      </section>
+
+      <!-- Text orientation -->
+      <section class="fx-section" data-section="orientation">
+        <header class="fx-section-header">
+          <span class="fx-section-title"><?php esc_html_e('Text orientation', 'mug-customizer'); ?></span>
+          <span class="fx-section-chevron" aria-hidden="true">&#9662;</span>
+        </header>
+        <div class="fx-section-body">
+          <div class="fx-orient-grid">
+            <button type="button" class="fx-orient is-active" data-orient="horizontal">
+              <div class="fx-orient-art fx-orient-h">abc</div>
+              <span class="fx-orient-label"><?php esc_html_e('Horizontal', 'mug-customizer'); ?></span>
+            </button>
+            <button type="button" class="fx-orient" data-orient="vertical">
+              <div class="fx-orient-art fx-orient-v"><span>a</span><span>b</span><span>c</span></div>
+              <span class="fx-orient-label"><?php esc_html_e('Vertical', 'mug-customizer'); ?></span>
+            </button>
+          </div>
+        </div>
+      </section>
+    </aside>
 
     <!-- Image Context Bar (shows when image object selected) -->
     <div id="img-context-bar" style="display:none;">
@@ -205,6 +426,12 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
         </span>
         <span class="tool-label"><?php esc_html_e('Images', 'mug-customizer'); ?></span>
+      </div>
+      <div class="tool-item" id="tool-background" role="button" tabindex="0" aria-pressed="false" title="Background">
+        <span class="tool-icon" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><path d="M4 16l4-4 3 3 5-5 4 4"></path><circle cx="9" cy="9" r="1.2"></circle></svg>
+        </span>
+        <span class="tool-label"><?php esc_html_e('Background', 'mug-customizer'); ?></span>
       </div>
       <div class="tool-item" id="tool-layers" role="button" tabindex="0" aria-pressed="false" title="Layers">
         <span class="tool-icon" aria-hidden="true">
@@ -298,21 +525,140 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
       </div>
     </div>
 
+    <!-- Background Panel (floating, shows when background tool active) — Zazzle parity -->
+    <div id="background-panel" class="floating-panel" style="display:none;" role="dialog" aria-labelledby="background-panel-title">
+      <div class="panel-header">
+        <h3 id="background-panel-title"><?php esc_html_e('Background', 'mug-customizer'); ?></h3>
+        <button type="button" class="panel-close" id="background-panel-close" aria-label="<?php esc_attr_e('Close', 'mug-customizer'); ?>">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="6" y1="18" x2="18" y2="6"></line></svg>
+        </button>
+      </div>
+
+      <!-- Search bar -->
+      <div class="bg-search">
+        <input type="text" id="bg-search-input" placeholder="<?php esc_attr_e('Search for backgrounds', 'mug-customizer'); ?>">
+        <button type="button" id="bg-search-btn" class="bg-search-btn" aria-label="<?php esc_attr_e('Search', 'mug-customizer'); ?>">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+        </button>
+      </div>
+
+      <!-- Background Image upload -->
+      <section class="bg-section" data-section="upload">
+        <header class="fx-section-header">
+          <span class="fx-section-title"><?php esc_html_e('Background Image', 'mug-customizer'); ?></span>
+          <span class="fx-section-chevron" aria-hidden="true">&#9662;</span>
+        </header>
+        <div class="fx-section-body">
+          <div class="bg-upload-row">
+            <div id="bg-uploaded-thumb" class="bg-uploaded-thumb" title="<?php esc_attr_e('Current background image', 'mug-customizer'); ?>">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.4" fill="currentColor"/><polyline points="21 15 16 10 5 21"/></svg>
+            </div>
+            <button type="button" id="bg-upload-btn" class="bg-upload-btn"><?php esc_html_e('Upload Image', 'mug-customizer'); ?></button>
+            <input type="file" id="bg-upload-input" accept="image/jpeg,image/png" hidden>
+          </div>
+        </div>
+      </section>
+
+      <!-- Background color (active preview + Remove) -->
+      <section class="bg-section" data-section="color">
+        <header class="fx-section-header">
+          <span class="fx-section-title"><?php esc_html_e('Background color', 'mug-customizer'); ?></span>
+          <span class="fx-section-chevron" aria-hidden="true">&#9662;</span>
+        </header>
+        <div class="fx-section-body">
+          <div class="bg-color-row">
+            <div id="bg-color-preview" class="bg-color-preview is-transparent" title="<?php esc_attr_e('Active background', 'mug-customizer'); ?>"></div>
+            <button type="button" id="bg-remove-btn" class="bg-remove-btn-outline"><?php esc_html_e('Remove', 'mug-customizer'); ?></button>
+          </div>
+          <div class="bg-custom-row">
+            <button type="button" id="bg-eyedropper-btn" class="bg-eyedropper-btn" title="<?php esc_attr_e('Pick colour', 'mug-customizer'); ?>">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21l4-1 11-11-3-3L4 17l-1 4z"/><path d="M14 6l3 3"/></svg>
+            </button>
+            <div class="bg-hex-wrap">
+              <span class="bg-hex-checker" aria-hidden="true"></span>
+              <input type="text" id="bg-hex-input" class="bg-hex-input" value="#00FFFFFF" maxlength="9" spellcheck="false">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Swatches -->
+      <section class="bg-section" data-section="swatches">
+        <header class="fx-section-header">
+          <span class="fx-section-title"><?php esc_html_e('Swatches', 'mug-customizer'); ?></span>
+          <span class="fx-section-chevron" aria-hidden="true">&#9662;</span>
+        </header>
+        <div class="fx-section-body">
+          <div class="bg-swatch-grid">
+            <button type="button" class="bg-swatch is-transparent is-active" data-color="transparent" title="Transparent"></button>
+            <button type="button" class="bg-swatch" style="background:#ffffff" data-color="#ffffff" title="White"></button>
+            <button type="button" class="bg-swatch" style="background:#9ca3af" data-color="#9ca3af" title="Grey"></button>
+            <button type="button" class="bg-swatch" style="background:#000000" data-color="#000000" title="Black"></button>
+            <button type="button" class="bg-swatch" style="background:#7dd3fc" data-color="#7dd3fc" title="Light blue"></button>
+            <button type="button" class="bg-swatch" style="background:#0ea5e9" data-color="#0ea5e9" title="Blue"></button>
+            <button type="button" class="bg-swatch" style="background:#7c3aed" data-color="#7c3aed" title="Purple"></button>
+            <button type="button" class="bg-swatch" style="background:#fbcfe8" data-color="#fbcfe8" title="Pink"></button>
+            <button type="button" class="bg-swatch" style="background:#ec4899" data-color="#ec4899" title="Magenta"></button>
+            <button type="button" class="bg-swatch" style="background:#dc2626" data-color="#dc2626" title="Red"></button>
+            <button type="button" class="bg-swatch" style="background:#f97316" data-color="#f97316" title="Orange"></button>
+            <button type="button" class="bg-swatch" style="background:#92400e" data-color="#92400e" title="Brown"></button>
+          </div>
+          <button type="button" id="bg-expand-btn" class="bg-expand-btn">+ <?php esc_html_e('Expand', 'mug-customizer'); ?></button>
+        </div>
+      </section>
+
+      <!-- Additional colors (collapsed by default) -->
+      <section class="bg-section is-collapsed" data-section="additional">
+        <header class="fx-section-header">
+          <span class="fx-section-title"><?php esc_html_e('Additional colors', 'mug-customizer'); ?></span>
+          <span class="fx-section-chevron" aria-hidden="true">&#9662;</span>
+        </header>
+        <div class="fx-section-body">
+          <div class="bg-swatch-grid">
+            <button type="button" class="bg-swatch" style="background:#fef3c7" data-color="#fef3c7" title="Cream"></button>
+            <button type="button" class="bg-swatch" style="background:#facc15" data-color="#facc15" title="Yellow"></button>
+            <button type="button" class="bg-swatch" style="background:#84cc16" data-color="#84cc16" title="Lime"></button>
+            <button type="button" class="bg-swatch" style="background:#16a34a" data-color="#16a34a" title="Green"></button>
+            <button type="button" class="bg-swatch" style="background:#0d9488" data-color="#0d9488" title="Teal"></button>
+            <button type="button" class="bg-swatch" style="background:#1e3a8a" data-color="#1e3a8a" title="Navy"></button>
+            <button type="button" class="bg-swatch" style="background:#4c1d95" data-color="#4c1d95" title="Indigo"></button>
+            <button type="button" class="bg-swatch" style="background:#831843" data-color="#831843" title="Maroon"></button>
+            <button type="button" class="bg-swatch" style="background:#451a03" data-color="#451a03" title="Dark brown"></button>
+            <button type="button" class="bg-swatch" style="background:#1c1917" data-color="#1c1917" title="Charcoal"></button>
+            <button type="button" class="bg-swatch" style="background:#d4d4d8" data-color="#d4d4d8" title="Light grey"></button>
+            <button type="button" class="bg-swatch" style="background:#fafafa" data-color="#fafafa" title="Off-white"></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Print-Friendly / Web tabs -->
+      <div class="bg-tab-group" role="tablist">
+        <button type="button" class="bg-tab is-active" data-kind="print" role="tab" aria-selected="true"><?php esc_html_e('Print-Friendly', 'mug-customizer'); ?></button>
+        <button type="button" class="bg-tab" data-kind="web" role="tab" aria-selected="false"><?php esc_html_e('Web', 'mug-customizer'); ?></button>
+      </div>
+
+      <!-- Backgrounds preset grid -->
+      <section class="bg-section" data-section="presets">
+        <header class="fx-section-header">
+          <span class="fx-section-title"><?php esc_html_e('Backgrounds', 'mug-customizer'); ?></span>
+          <span class="fx-section-chevron" aria-hidden="true">&#9662;</span>
+        </header>
+        <div class="fx-section-body">
+          <div id="bg-preset-grid" class="bg-preset-grid"><!-- Populated by JS from _BG_PRESETS --></div>
+        </div>
+      </section>
+    </div>
+
     <!-- Mug Canvas (centered) -->
     <div id="canvas-container">
       <canvas id="mug-canvas"></canvas>
     </div>
 
-    <!-- Variant Panel (floating, top-right) — live preview only (Zazzle parity) -->
+    <!-- Variant Panel (floating, top-right) — photorealistic mug + cylindrically-wrapped design (Zazzle parity) -->
     <div id="variant-panel">
       <div class="live-preview-section">
         <div id="preview-3d-wrap">
-          <img id="preview-mug-bg" src="" alt="" draggable="false">
-          <div id="preview-mug-tint"></div>
-          <div id="preview-design-layer">
-            <img id="preview-design-img" src="" alt="" draggable="false">
-            <div id="preview-shading"></div>
-          </div>
+          <canvas id="preview-live-canvas" width="312" height="280"></canvas>
         </div>
         <div class="live-preview-label"><?php esc_html_e('Text &amp; Images', 'mug-customizer'); ?></div>
       </div>
@@ -411,14 +757,62 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
       <button type="button" id="btn-zoom-in" class="zc-circle" aria-label="<?php esc_attr_e('Zoom in', 'mug-customizer'); ?>" title="<?php esc_attr_e('Zoom in', 'mug-customizer'); ?>">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
       </button>
-      <button type="button" id="btn-zoom-settings" class="zc-circle" aria-label="<?php esc_attr_e('Settings', 'mug-customizer'); ?>" title="<?php esc_attr_e('Settings', 'mug-customizer'); ?>">
+      <button type="button" id="btn-zoom-settings" class="zc-circle" aria-label="<?php esc_attr_e('Settings', 'mug-customizer'); ?>" title="<?php esc_attr_e('Settings', 'mug-customizer'); ?>" aria-haspopup="true" aria-expanded="false">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       </button>
+      <div id="settings-popover" class="settings-popover" hidden role="dialog" aria-label="<?php esc_attr_e('Designer settings', 'mug-customizer'); ?>">
+        <label class="set-row">
+          <div class="set-text">
+            <span class="set-title"><?php esc_html_e('Enable dark mode', 'mug-customizer'); ?></span>
+            <span class="set-desc"><?php esc_html_e('Apply dark theme to reduce eye strain in low-light settings.', 'mug-customizer'); ?></span>
+          </div>
+          <span class="fx-switch"><input type="checkbox" id="set-dark-mode"><span class="fx-switch-track"></span></span>
+        </label>
+        <label class="set-row">
+          <div class="set-text">
+            <span class="set-title"><?php esc_html_e('Lock aspect ratio', 'mug-customizer'); ?></span>
+            <span class="set-desc"><?php esc_html_e('Maintains the aspect ratio of all canvas objects', 'mug-customizer'); ?></span>
+          </div>
+          <span class="fx-switch"><input type="checkbox" id="set-lock-aspect" checked><span class="fx-switch-track"></span></span>
+        </label>
+        <label class="set-row">
+          <div class="set-text">
+            <span class="set-title"><?php esc_html_e('Enable snapping', 'mug-customizer'); ?></span>
+            <span class="set-desc"><?php esc_html_e('Snaps objects to the grid for easier alignment', 'mug-customizer'); ?></span>
+          </div>
+          <span class="fx-switch"><input type="checkbox" id="set-snapping" checked><span class="fx-switch-track"></span></span>
+        </label>
+        <label class="set-row">
+          <div class="set-text">
+            <span class="set-title"><?php esc_html_e('Show all guidelines', 'mug-customizer'); ?></span>
+            <span class="set-desc"><?php esc_html_e('Displays bleed, cut, and print lines of the design', 'mug-customizer'); ?></span>
+          </div>
+          <span class="fx-switch"><input type="checkbox" id="set-guidelines" checked><span class="fx-switch-track"></span></span>
+        </label>
+        <label class="set-row">
+          <div class="set-text">
+            <span class="set-title"><?php esc_html_e('Show gridlines', 'mug-customizer'); ?></span>
+            <span class="set-desc"><?php esc_html_e('Overlays a grid pattern over the canvas', 'mug-customizer'); ?></span>
+          </div>
+          <span class="fx-switch"><input type="checkbox" id="set-gridlines"><span class="fx-switch-track"></span></span>
+        </label>
+        <label class="set-row">
+          <div class="set-text">
+            <span class="set-title"><?php esc_html_e('Show bleed mask', 'mug-customizer'); ?></span>
+            <span class="set-desc"><?php esc_html_e('Renders the visible area of print', 'mug-customizer'); ?></span>
+          </div>
+          <span class="fx-switch"><input type="checkbox" id="set-bleed-mask"><span class="fx-switch-track"></span></span>
+        </label>
+        <label class="set-row">
+          <div class="set-text">
+            <span class="set-title"><?php esc_html_e('Show transparency', 'mug-customizer'); ?></span>
+            <span class="set-desc"><?php esc_html_e('Renders a checkboard grid on the canvas.', 'mug-customizer'); ?></span>
+          </div>
+          <span class="fx-switch"><input type="checkbox" id="set-transparency"><span class="fx-switch-track"></span></span>
+        </label>
+      </div>
       <button type="button" id="btn-zoom-help" class="zc-circle" aria-label="<?php esc_attr_e('Help', 'mug-customizer'); ?>" title="<?php esc_attr_e('Help', 'mug-customizer'); ?>">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-      </button>
-      <button type="button" id="btn-zoom-fit" class="zc-circle" aria-label="<?php esc_attr_e('Share', 'mug-customizer'); ?>" title="<?php esc_attr_e('Share / Fit to screen', 'mug-customizer'); ?>">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
       </button>
     </div>
 
@@ -459,6 +853,115 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
 
   </div><!-- /#canvas-stage -->
 
+  <!-- ── Review Page (Zazzle parity) — shown when Review tab active ───────── -->
+  <?php
+  $review_wc        = $product_id ? wc_get_product($product_id) : null;
+  $review_price     = $review_wc ? (float) $review_wc->get_price() : 15.05;
+  $review_reg_price = $review_wc ? (float) $review_wc->get_regular_price() : 17.70;
+  $on_sale          = $review_wc ? $review_wc->is_on_sale() : ($review_price < $review_reg_price);
+  $promo_code       = get_option('mc_promo_code', 'MAYDEALS4YOU');
+  $promo_pct        = (int) get_option('mc_promo_pct', 15);
+  $review_pluginurl = MUG_CUSTOMIZER_PLUGIN_URL . 'public/assets/images/';
+  ?>
+  <section id="review-page" hidden aria-labelledby="review-headline">
+    <div class="review-grid">
+
+      <!-- LEFT: thumbnail strip -->
+      <aside class="review-thumb-strip" aria-label="<?php esc_attr_e('Mug angles', 'mug-customizer'); ?>">
+        <div class="review-thumb active" data-angle-key="left" data-label="Left">
+          <canvas width="120" height="120"></canvas>
+          <span><?php esc_html_e('Left', 'mug-customizer'); ?></span>
+        </div>
+        <div class="review-thumb" data-angle-key="frontLeft" data-label="Front L">
+          <canvas width="120" height="120"></canvas>
+          <span><?php esc_html_e('Front L', 'mug-customizer'); ?></span>
+        </div>
+        <div class="review-thumb" data-angle-key="center" data-label="Center">
+          <canvas width="120" height="120"></canvas>
+          <span><?php esc_html_e('Center', 'mug-customizer'); ?></span>
+        </div>
+        <div class="review-thumb" data-angle-key="frontRight" data-label="Front R">
+          <canvas width="120" height="120"></canvas>
+          <span><?php esc_html_e('Front R', 'mug-customizer'); ?></span>
+        </div>
+        <div class="review-thumb" data-angle-key="right" data-label="Right">
+          <canvas width="120" height="120"></canvas>
+          <span><?php esc_html_e('Right', 'mug-customizer'); ?></span>
+        </div>
+        <div class="review-thumb" data-angle-key="handle" data-label="Handle">
+          <canvas width="120" height="120"></canvas>
+          <span><?php esc_html_e('Handle', 'mug-customizer'); ?></span>
+        </div>
+        <button type="button" class="review-thumb-scroll" aria-label="<?php esc_attr_e('Scroll thumbnails', 'mug-customizer'); ?>">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+      </aside>
+
+      <!-- CENTER: large preview -->
+      <div class="review-preview-wrap">
+        <canvas id="review-main-canvas" width="640" height="640"></canvas>
+        <div id="review-main-label"><?php esc_html_e('Left', 'mug-customizer'); ?></div>
+      </div>
+
+      <!-- RIGHT: purchase rail -->
+      <aside class="review-rail" data-unit-price="<?php echo esc_attr($review_price); ?>" data-reg-price="<?php echo esc_attr($review_reg_price); ?>">
+        <div class="review-sellbuy" role="tablist" aria-label="<?php esc_attr_e('Sell or Buy', 'mug-customizer'); ?>">
+          <button type="button" class="review-sb-btn" data-sb="sell" role="tab" aria-selected="false"><?php esc_html_e('Sell', 'mug-customizer'); ?></button>
+          <button type="button" class="review-sb-btn is-active" data-sb="buy" role="tab" aria-selected="true"><?php esc_html_e('Buy', 'mug-customizer'); ?></button>
+        </div>
+
+        <h2 id="review-headline" class="review-headline"><?php esc_html_e('Let’s make sure it’s just right', 'mug-customizer'); ?></h2>
+        <p class="review-subhead"><?php esc_html_e('Review your design before continuing.', 'mug-customizer'); ?></p>
+
+        <hr class="review-hr">
+
+        <div class="review-shipping">
+          <span class="review-truck" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+          </span>
+          <div class="review-ship-text">
+            <div><?php esc_html_e('Order today and get it by', 'mug-customizer'); ?> <span class="ship-date-fast" id="ship-date-fast"></span> <?php esc_html_e('with', 'mug-customizer'); ?> <strong><?php esc_html_e('expedited shipping', 'mug-customizer'); ?></strong></div>
+            <div class="muted"><?php esc_html_e('Get it by', 'mug-customizer'); ?> <span class="ship-date-std" id="ship-date-std"></span> <?php esc_html_e('with standard', 'mug-customizer'); ?></div>
+          </div>
+        </div>
+
+        <div class="review-price-row">
+          <span class="review-subtotal-label"><?php esc_html_e('Subtotal', 'mug-customizer'); ?></span>
+          <div class="review-price-block">
+            <span class="review-price" id="review-price">$<?php echo number_format($review_price, 2); ?></span>
+            <?php if ($on_sale) : ?>
+              <span class="review-comp">$<?php echo number_format($review_reg_price, 2); ?></span>
+              <span class="review-comp-label"><?php esc_html_e('Comp. value', 'mug-customizer'); ?></span>
+            <?php endif; ?>
+          </div>
+        </div>
+        <div class="review-per-mug"><?php esc_html_e('per mug', 'mug-customizer'); ?></div>
+        <?php if (!empty($promo_code)) : ?>
+          <div class="review-promo"><?php
+            /* translators: %1$d = percent, %2$s = code */
+            printf(esc_html__('Save %1$d%% with code %2$s', 'mug-customizer'), (int) $promo_pct, '<strong>' . esc_html($promo_code) . '</strong>');
+          ?></div>
+        <?php endif; ?>
+
+        <div class="review-qty-row">
+          <label class="review-qty-label" for="review-qty"><?php esc_html_e('Qty', 'mug-customizer'); ?></label>
+          <div class="review-qty-stepper">
+            <button type="button" class="review-qty-btn" id="review-qty-minus" aria-label="<?php esc_attr_e('Decrease quantity', 'mug-customizer'); ?>">−</button>
+            <input type="number" id="review-qty" class="review-qty-input" value="1" min="1" max="99">
+            <button type="button" class="review-qty-btn" id="review-qty-plus" aria-label="<?php esc_attr_e('Increase quantity', 'mug-customizer'); ?>">+</button>
+          </div>
+        </div>
+
+        <button type="button" id="review-add-to-cart" class="review-add-to-cart">
+          <span><?php esc_html_e('Add to Cart', 'mug-customizer'); ?></span>
+        </button>
+
+        <div class="review-trust"><?php esc_html_e('100% Satisfaction Guaranteed', 'mug-customizer'); ?></div>
+      </aside>
+
+    </div>
+  </section>
+
 </div><!-- /#designer-wrap -->
 
 <!-- ── Full Preview Modal (Zazzle-style: thumb strip + large view) ─────── -->
@@ -469,53 +972,54 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
 
     <div id="preview-modal-inner">
 
-      <!-- Left thumbnail strip (7 views) -->
+      <!-- Left thumbnail strip — 7 photographed angles (Zazzle parity) -->
       <?php $pu = MUG_CUSTOMIZER_PLUGIN_URL . 'public/assets/images/'; ?>
       <div id="preview-modal-strip">
-        <div class="preview-modal-thumb active" data-angle="-70" data-label="Left">
-          <canvas width="72" height="60"></canvas>
+        <div class="preview-modal-thumb" data-angle-key="left" data-angle="-70" data-label="Left">
+          <canvas width="80" height="80"></canvas>
           <img src="<?php echo esc_url($pu . 'mug-left.jpg'); ?>" class="thumb-photo" alt="Left">
           <span><?php esc_html_e('Left', 'mug-customizer'); ?></span>
         </div>
-        <div class="preview-modal-thumb" data-angle="-35" data-label="Front L">
-          <canvas width="72" height="60"></canvas>
+        <div class="preview-modal-thumb" data-angle-key="frontLeft" data-angle="-35" data-label="Front L">
+          <canvas width="80" height="80"></canvas>
           <img src="<?php echo esc_url($pu . 'mug-front-left.jpg'); ?>" class="thumb-photo" alt="Front L">
           <span><?php esc_html_e('Front L', 'mug-customizer'); ?></span>
         </div>
-        <div class="preview-modal-thumb" data-angle="0" data-label="Center">
-          <canvas width="72" height="60"></canvas>
-          <img src="<?php echo esc_url($pu . 'mug-front-left.jpg'); ?>" class="thumb-photo" alt="Center">
+        <div class="preview-modal-thumb active" data-angle-key="center" data-angle="0" data-label="Center">
+          <canvas width="80" height="80"></canvas>
+          <img src="<?php echo esc_url($pu . 'mug-center.jpg'); ?>" class="thumb-photo" alt="Center">
           <span><?php esc_html_e('Center', 'mug-customizer'); ?></span>
         </div>
-        <div class="preview-modal-thumb" data-angle="35" data-label="Front R">
-          <canvas width="72" height="60"></canvas>
+        <div class="preview-modal-thumb" data-angle-key="frontRight" data-angle="35" data-label="Front R">
+          <canvas width="80" height="80"></canvas>
           <img src="<?php echo esc_url($pu . 'mug-front-right.jpg'); ?>" class="thumb-photo" alt="Front R">
           <span><?php esc_html_e('Front R', 'mug-customizer'); ?></span>
         </div>
-        <div class="preview-modal-thumb" data-angle="70" data-label="Right">
-          <canvas width="72" height="60"></canvas>
+        <div class="preview-modal-thumb" data-angle-key="right" data-angle="70" data-label="Right">
+          <canvas width="80" height="80"></canvas>
           <img src="<?php echo esc_url($pu . 'mug-right.jpg'); ?>" class="thumb-photo" alt="Right">
           <span><?php esc_html_e('Right', 'mug-customizer'); ?></span>
         </div>
-        <div class="preview-modal-thumb" data-angle="130" data-label="Handle">
-          <canvas width="72" height="60"></canvas>
+        <div class="preview-modal-thumb" data-angle-key="handle" data-angle="130" data-label="Handle">
+          <canvas width="80" height="80"></canvas>
           <img src="<?php echo esc_url($pu . 'mug-handle.jpg'); ?>" class="thumb-photo" alt="Handle">
           <span><?php esc_html_e('Handle', 'mug-customizer'); ?></span>
         </div>
-        <div class="preview-modal-thumb" data-angle="-999" data-label="Donut" data-is-donut="true">
-          <canvas width="72" height="60"></canvas>
-          <span><?php esc_html_e('Donut', 'mug-customizer'); ?></span>
+        <div class="preview-modal-thumb" data-angle-key="donut" data-angle="-999" data-label="Top View" data-is-donut="true">
+          <canvas width="80" height="80"></canvas>
+          <img src="<?php echo esc_url($pu . 'mug-donut.jpg'); ?>" class="thumb-photo" alt="Top View">
+          <span><?php esc_html_e('Top View', 'mug-customizer'); ?></span>
         </div>
         <div class="preview-modal-strip-scroll">▼</div>
       </div>
 
-      <!-- Right large preview area -->
+      <!-- Right large preview area — canvas-2D for ALL angles using real photos -->
       <div id="preview-modal-main">
-        <!-- Three.js WebGL view (all non-donut angles) -->
-        <div id="preview-modal-threejs"></div>
-        <!-- Fallback canvas 2D: donut view only -->
-        <canvas id="preview-modal-canvas" width="500" height="440" style="display:none;"></canvas>
-        <div id="preview-modal-label"><?php esc_html_e('Left', 'mug-customizer'); ?></div>
+        <!-- Three.js view kept for backwards-compat but hidden — real-photo
+             pipeline below replaces it. -->
+        <div id="preview-modal-threejs" style="display:none;"></div>
+        <canvas id="preview-modal-canvas" width="640" height="640"></canvas>
+        <div id="preview-modal-label"><?php esc_html_e('Center', 'mug-customizer'); ?></div>
       </div>
 
     </div>

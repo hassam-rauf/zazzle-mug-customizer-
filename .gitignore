@@ -11,9 +11,10 @@ vendor/
 Thumbs.db
 *.swp
 
-# IDE
+# IDE / agent tooling
 .vscode/
 .idea/
+.claude/
 
 # Uploads (generated at runtime — not in repo)
 wp-content/uploads/mug-designs/

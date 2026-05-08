@@ -8,6 +8,7 @@
   // ── State ────────────────────────────────────────────────────────────────
   let canvas;
   let printAreaRect;
+  let _dimLabelObj  = null;   // fabric Text — hidden once user adds any object
   let historyStack  = [];
   let historyIndex  = -1;
   let isHistoryLock = false;
@@ -19,9 +20,15 @@
   let _warpRafPending  = false;
   let _warpMugEl       = null;  // raw HTMLImageElement captured before color filter
 
-  // Three.js preview state
+  // Three.js preview state — modal scene (large, multi-angle thumbnails)
   var _three       = null;   // { renderer, scene, camera, mugGroup, bodyMat, bottomMat, designTex }
   var _threeInited = false;
+
+  // Live preview offscreen canvases — reused per-frame to avoid GC churn:
+  //  _liveSnapCanvas   = full-canvas snapshot of fabric design layer
+  //  _liveDesignCanvas = cylinder-projected design composited with shading
+  var _liveSnapCanvas   = null;
+  var _liveDesignCanvas = null;
 
   // Multi-angle preview — matches Zazzle's angle-strip UX.
   // viewHalf (65°): angular half-FOV of the virtual camera; controls how much
@@ -54,20 +61,34 @@
       label:    'Center',
       mugFile:  'mug-classic-white.png',
       mugLeft:  30,
-      // Zazzle approach: bleed visually covers mug FRONT FACE + ~50% side
-      // extension (NOT the full unrolled 9.5"×3.5" wrap). Backend export still
-      // produces full 9.5×3.5 print at 300 DPI — this is purely UI proportion.
-      // Canvas 720×420; mug ~277h × ~387w at left:30, top:~71 → front face
-      // approx x=110-417. Bleed: x=165 (after handle, on front face) to x=575.
+      // Calibrated to industry-standard 11oz ceramic mug, anchored to the
+      // photographed mug PNG (mug-relative percentages — survives canvas
+      // resize and per-variant photo replacement).
+      //
+      // Real-world print spec: 9.5″ × 3.5″ (aspect 2.714 : 1) full-wrap.
+      // The unwrap rectangle covers FRONT FACE (~33%) + RIGHT WRAP (~33%)
+      // + BACK WRAP (~33%) — visualised by two dotted vertical zone dividers
+      // inside `setupPrintArea()`.
+      //
+      // Anchor (relative to drawn mug bounds, after scaleToHeight 0.66·H):
+      //   leftPct  = 0.42  → starts just past the handle joint (left edge of body face)
+      //   topPct   = 0.14  → 14% inset from rim, clears top shadow
+      //   widthPct = 1.95  → 195% of mug width — extends past mug right edge
+      //                      to communicate the wrap-around (Zazzle metaphor)
+      //   heightPct = 0.72 → 72% of mug height — clears base shadow
+      //   widthScale = 1   → no curvature trim (full unwrap is rectangular)
+      //
+      // For a 277×277 scaled mug at left:30, top:71 these resolve to:
+      //   pa = { left: 146, top: 110, width: 540, height: 199 }  (≈ 9.5″×3.5″)
       printArea: {
-        x:         165,
-        y:         100,
-        width:     410,
-        height:    220,
-        pngWidth:  720,
-        pngHeight: 420,
-        wrapDeg:   360,
-        rx:        18,
+        relTo:      'mug',
+        leftPct:    0.42,
+        topPct:     0.14,
+        widthPct:   1.95,
+        heightPct:  0.72,
+        widthScale: 1,
+        wrapDeg:    360,
+        rx:         14,
       },
     },
   };
@@ -87,32 +108,60 @@
   let selectedAddons = [];
 
   // Hex per color name — drives the multiply tint on the white mug PNG so we
-  // get infinite colors from a single asset. 'black' is intentionally #2a2a2a
-  // rather than pure black so subtle ceramic shading isn't crushed to flat.
-  var COLOR_HEX_MAP = {
-    black:  '#2a2a2a',
-    white:  '#ffffff',
-    red:    '#dc2626',
-    blue:   '#2563eb',
-    green:  '#16a34a',
-    navy:   '#1e3a5f',
-    pink:   '#ec4899',
-    yellow: '#fbbf24',
-    purple: '#7c3aed',
-    grey:   '#6b7280',
-    gray:   '#6b7280',
+  // get infinite colors from a single asset. Tint is applied via a TRUE
+  // multiply blend on an off-screen canvas, then re-masked to the mug shape
+  // (multiply alone would fill transparent pixels). Photo highlights stay as
+  // brighter tinted pixels and shadows get even darker — preserving the
+  // ceramic look. Hex is the multiply colour; alpha is unused for multiply
+  // mode but kept so 0 still flags "no tint" (white).
+  var COLOR_TINT_MAP = {
+    black:  { hex: '#1a1a1a', alpha: 1 },
+    white:  { hex: '#ffffff', alpha: 0 },
+    red:    { hex: '#dc2626', alpha: 1 },
+    blue:   { hex: '#2563eb', alpha: 1 },
+    green:  { hex: '#16a34a', alpha: 1 },
+    navy:   { hex: '#1e3a5f', alpha: 1 },
+    pink:   { hex: '#ec4899', alpha: 1 },
+    yellow: { hex: '#fbbf24', alpha: 1 },
+    purple: { hex: '#7c3aed', alpha: 1 },
+    grey:   { hex: '#6b7280', alpha: 1 },
+    gray:   { hex: '#6b7280', alpha: 1 },
   };
+  // Back-compat alias — older code paths just want the hex string.
+  var COLOR_HEX_MAP = (function () {
+    var m = {};
+    Object.keys(COLOR_TINT_MAP).forEach(function (k) { m[k] = COLOR_TINT_MAP[k].hex; });
+    return m;
+  })();
+  function _tintFor(name) {
+    return COLOR_TINT_MAP[(name || '').toLowerCase()] || { hex: '#ffffff', alpha: 0 };
+  }
+  // Default fallback used when alpha isn't known by callers.
+  var TINT_ALPHA = 0.85;
 
+  function _hexToRGBA(hex, alpha) {
+    var h = (hex || '#000000').replace('#', '');
+    if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    var r = parseInt(h.substr(0,2),16) || 0;
+    var g = parseInt(h.substr(2,2),16) || 0;
+    var b = parseInt(h.substr(4,2),16) || 0;
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+  }
+
+  // Pre-render the mug photo + colour overlay onto an off-screen canvas, then
+  // swap that as the fabric.Image's element. This bypasses fabric.BlendColor
+  // (whose multiply mode crushed the placeholder mug to flat black) and gives
+  // a deterministic alpha-compositing tint with photo detail preserved.
+  // Tinting is disabled while we only have a single placeholder mug photo —
+  // attempting to tint a flat-light photo into a believable "black mug" gave
+  // a flat silhouette that didn't match the real product. Re-enable per-colour
+  // tinting once the client provides photographed black/red/blue/etc. mug
+  // PNGs (drop them into mockupMap so getMugUrl returns the right asset and
+  // no tint is needed).
   function applyMugTint(img) {
-    if (! img || ! fabric.Image || ! fabric.Image.filters) return;
-    const hex = COLOR_HEX_MAP[(selectedVariant.color || '').toLowerCase()] || '#ffffff';
+    if (!img) return;
     img.filters = [];
-    if (hex.toLowerCase() !== '#ffffff') {
-      img.filters.push(new fabric.Image.filters.BlendColor({
-        color: hex, mode: 'multiply', alpha: 1,
-      }));
-    }
-    img.applyFilters();
+    img.dirty = true;
   }
 
   // ── Canvas Init ───────────────────────────────────────────────────────────
@@ -120,7 +169,7 @@
     canvas = new fabric.Canvas('mug-canvas', {
       width:            720,
       height:           420,
-      backgroundColor:  '#f5f5f7',
+      backgroundColor:  '#f3f5f8',
       selection:        true,
       preserveObjectStacking: true,
     });
@@ -284,6 +333,18 @@
     _printAreaGuides.forEach(function (o) { canvas.remove(o); });
     _printAreaGuides = [];
     if (printAreaRect) { canvas.remove(printAreaRect); printAreaRect = null; }
+    // Also remove any prior design-bg fill — it'll be re-created at the new
+    // print area position below
+    if (typeof _designBgFill !== 'undefined' && _designBgFill) {
+      canvas.remove(_designBgFill);
+      _designBgFill = null;
+    }
+
+    // Zazzle palette (Tailwind-style greens)
+    var GREEN_LINE   = '#16a34a';
+    var GREEN_PILL_BG  = '#dcfce7';
+    var GREEN_PILL_TXT = '#15803d';
+    var DIM_LABEL_FILL = '#94a3b8';
 
     // Outer bleed zone (green dashed, rounded corners — Zazzle parity)
     var bleedRx = (typeof pa.rx === 'number') ? pa.rx : 10;
@@ -294,10 +355,10 @@
       height:          pa.height,
       rx:              bleedRx,
       ry:              bleedRx,
-      fill:            'rgba(76,175,80,0.03)',
-      stroke:          '#4caf50',
-      strokeWidth:     1.8,
-      strokeDashArray: [6, 4],
+      fill:            'transparent',
+      stroke:          GREEN_LINE,
+      strokeWidth:     1.5,
+      strokeDashArray: [7, 4],
       selectable:      false,
       evented:         false,
       excludeFromExport: true,
@@ -305,14 +366,14 @@
     canvas.add(printAreaRect);
     _printAreaGuides.push(printAreaRect);
 
-    // Safe zone — inset from bleed (Zazzle ratio: safe=8.5/9.5 of bleed width)
-    var safeWFrac = 0.895;
-    var safeHFrac = 0.897;
+    // Safe zone — inset ~6% from bleed
+    var safeWFrac = 0.93;
+    var safeHFrac = 0.84;
     var safeW     = Math.round(pa.width  * safeWFrac);
     var safeH     = Math.round(pa.height * safeHFrac);
     var safeLeft  = pa.left + Math.round((pa.width  - safeW) / 2);
     var safeTop   = pa.top  + Math.round((pa.height - safeH) / 2);
-    var safeRx = Math.max(4, bleedRx - 2);
+    var safeRx    = Math.max(4, bleedRx - 4);
     var safeZone  = new fabric.Rect({
       left:            safeLeft,
       top:             safeTop,
@@ -321,9 +382,9 @@
       rx:              safeRx,
       ry:              safeRx,
       fill:            'transparent',
-      stroke:          '#4caf50',
-      strokeWidth:     1,
-      strokeDashArray: [3, 5],
+      stroke:          GREEN_LINE,
+      strokeWidth:     1.5,
+      strokeDashArray: [5, 4],
       selectable:      false,
       evented:         false,
       excludeFromExport: true,
@@ -331,35 +392,35 @@
     canvas.add(safeZone);
     _printAreaGuides.push(safeZone);
 
-    // Vertical fold lines inside safe zone (3 dividers like Zazzle)
-    var foldPositions = [0.25, 0.5, 0.75];
+    // Vertical zone dividers — 2 dotted lines at 1/3 and 2/3 → 3 wrap zones
+    var foldPositions = [1 / 3, 2 / 3];
     foldPositions.forEach(function(fp) {
       var fx = Math.round(safeLeft + fp * safeW);
       var fLine = new fabric.Line(
         [fx, safeTop, fx, safeTop + safeH],
-        { stroke: '#4caf50', strokeWidth: 1, strokeDashArray: [2, 6], opacity: 0.5,
+        { stroke: GREEN_LINE, strokeWidth: 1.4, strokeDashArray: [1.5, 5], opacity: 0.55,
           selectable: false, evented: false, excludeFromExport: true }
       );
       canvas.add(fLine);
       _printAreaGuides.push(fLine);
     });
 
-    // "Safe area" badge — rounded green pill at top-center of safe zone (Zazzle parity)
+    // "Safe area" badge — rounded green pill anchored at top-center of safe zone
     var badgeText = new fabric.Text('Safe area', {
-      fontSize:   11,
-      fill:       '#1b5e20',
-      fontFamily: 'Arial, sans-serif',
+      fontSize:   12,
+      fill:       GREEN_PILL_TXT,
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
       fontWeight: '600',
       originX:    'center',
       originY:    'center',
     });
     var badgeBg = new fabric.Rect({
-      width:  badgeText.width  + 18,
-      height: badgeText.height + 8,
-      rx:     11,
-      ry:     11,
-      fill:   '#dff5e0',
-      stroke: '#4caf50',
+      width:  badgeText.width  + 24,
+      height: badgeText.height + 10,
+      rx:     12,
+      ry:     12,
+      fill:   GREEN_PILL_BG,
+      stroke: GREEN_LINE,
       strokeWidth: 1,
       originX: 'center',
       originY: 'center',
@@ -376,28 +437,51 @@
     canvas.add(safeLabel);
     _printAreaGuides.push(safeLabel);
 
-    // Dimension label inside safe zone
+    // Dimension label — centered inside print rect; hidden when user adds any object
     const dims = PRINT_DIMS_IN[selectedVariant.size] || PRINT_DIMS_IN['11oz'];
     const dimLabel = new fabric.Text(dims.w + '″ \xd7 ' + dims.h + '″', {
-      left:       safeLeft + safeW / 2,
-      top:        safeTop  + safeH / 2 - 6,
-      fontSize:   10,
-      fill:       '#888',
-      fontFamily: 'Arial, sans-serif',
+      left:       pa.left + pa.width  / 2,
+      top:        pa.top  + pa.height / 2,
+      fontSize:   13,
+      fill:       DIM_LABEL_FILL,
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
+      fontWeight: '500',
       originX:    'center',
+      originY:    'center',
       selectable: false,
       evented:    false,
       excludeFromExport: true,
     });
     canvas.add(dimLabel);
     _printAreaGuides.push(dimLabel);
+    _dimLabelObj = dimLabel;
+    updateDimLabelVisibility();
 
     // Print-area enforcement is soft (boundary toast + green dashed rect) so
     // the user can see the WHOLE mug while editing. A canvas-level clipPath
     // would hide the mug background outside the print area too — confusing.
     canvas.clipPath = null;
 
+    // If user has a design-area bg active, re-apply it at the new print rect
+    if (typeof _designBgState !== 'undefined' && _designBgState && _designBgState.type !== 'transparent' && typeof _updateDesignBgFill === 'function') {
+      _updateDesignBgFill();
+    }
+
     canvas.requestRenderAll();
+  }
+
+  // Hide the dimension label as soon as the user adds anything; show again
+  // when canvas is empty. User objects = anything not flagged excludeFromExport.
+  function updateDimLabelVisibility() {
+    if (! _dimLabelObj || ! canvas) return;
+    var userCount = canvas.getObjects().filter(function (o) {
+      return ! o.excludeFromExport;
+    }).length;
+    var shouldShow = userCount === 0;
+    if (_dimLabelObj.visible !== shouldShow) {
+      _dimLabelObj.visible = shouldShow;
+      canvas.requestRenderAll();
+    }
   }
 
   // ── View Switcher (multi-angle) ───────────────────────────────────────────
@@ -744,6 +828,11 @@
   }
 
   // ── Context Bar ───────────────────────────────────────────────────────────
+  // Fonts that ship without bold/italic variants in our default stack.
+  // Used to grey out B/I (Zazzle parity) when no real variant exists.
+  const FONTS_WITHOUT_BOLD   = ['Dancing Script'];
+  const FONTS_WITHOUT_ITALIC = ['Oswald', 'Dancing Script'];
+
   function showContextBar(obj) {
     const textBar = document.getElementById('context-bar');
     const imgBar  = document.getElementById('img-context-bar');
@@ -752,23 +841,40 @@
     const isText  = obj.type === 'IText' || obj.type === 'Textbox' || obj.type === 'i-text';
     const isImage = obj.type === 'image' || obj.type === 'Image';
 
-    textBar.style.display = isText  ? 'flex' : 'none';
-    imgBar.style.display  = isImage ? 'flex' : 'none';
+    // Text bar uses the floating-pill .is-visible class (display managed by CSS).
+    textBar.classList.toggle('is-visible', !!isText);
+    imgBar.style.display = isImage ? 'flex' : 'none';
 
     if (isText) {
       const set = function (id, val) { const el = document.getElementById(id); if (el) el.value = val; };
-      set('ctx-font',         obj.fontFamily   || 'Georgia');
-      set('ctx-size',         obj.fontSize     || 24);
-      set('ctx-color',        obj.fill         || '#222222');
+      const font     = obj.fontFamily || 'Georgia';
+      const size     = obj.fontSize   || 24;
+      const fill     = obj.fill       || '#222222';
+
+      set('ctx-font',         font);
+      set('ctx-size',         size);
+      set('ctx-size-input',   _formatSize(size));
+      set('ctx-color',        fill);
       set('ctx-angle',        Math.round(obj.angle || 0));
       set('ctx-spacing',      obj.charSpacing  || 0);
       set('ctx-lineheight',   Math.round((obj.lineHeight || 1.2) * 100));
       set('ctx-stroke-color', obj.stroke       || '#000000');
       set('ctx-stroke-width', obj.strokeWidth  || 0);
 
-      // Sync new size display span and alignment dropdown
+      // Legacy size span (kept hidden but updated for any external readers)
       const sizeVal = document.getElementById('ctx-size-val');
-      if (sizeVal) sizeVal.textContent = Math.round(obj.fontSize || 24);
+      if (sizeVal) sizeVal.textContent = _formatSize(size);
+
+      // Font name preview — render the name in its own font
+      const fontPreview = document.getElementById('ctx-font-preview');
+      if (fontPreview) {
+        fontPreview.textContent = font;
+        fontPreview.style.fontFamily = font;
+      }
+
+      // Color swatch tint (the native <input type=color> shows the colour itself)
+      const colorEl = document.getElementById('ctx-color');
+      if (colorEl) colorEl.style.background = fill;
 
       const alignSel = document.getElementById('ctx-align-select');
       if (alignSel) alignSel.value = obj.textAlign || 'left';
@@ -780,6 +886,21 @@
       syncToggle('ctx-bold',      obj.fontWeight === 'bold');
       syncToggle('ctx-italic',    obj.fontStyle  === 'italic');
       syncToggle('ctx-underline', obj.underline  === true);
+
+      // Disable B/I when current font has no such variant (Zazzle parity)
+      const boldBtn   = document.getElementById('ctx-bold');
+      const italicBtn = document.getElementById('ctx-italic');
+      if (boldBtn)   boldBtn.classList.toggle('is-disabled',   FONTS_WITHOUT_BOLD.indexOf(font) !== -1);
+      if (italicBtn) italicBtn.classList.toggle('is-disabled', FONTS_WITHOUT_ITALIC.indexOf(font) !== -1);
+
+      // Anchor the floating pill below (or above) the selected text
+      positionContextBar(obj);
+
+      // If Effects panel is open, refresh its controls to match new selection
+      syncEffectsPanel(obj);
+    } else {
+      // Hide spacing/more popovers when bar is dismissed for a non-text selection
+      _closePopovers();
     }
 
     if (isImage) {
@@ -797,9 +918,96 @@
   function hideContextBar() {
     const textBar = document.getElementById('context-bar');
     const imgBar  = document.getElementById('img-context-bar');
-    if (textBar) textBar.style.display = 'none';
+    if (textBar) {
+      textBar.classList.remove('is-visible');
+      textBar.style.left = '-9999px';
+      textBar.style.top  = '-9999px';
+    }
     if (imgBar)  imgBar.style.display  = 'none';
+    _closePopovers();
     clearGuides();
+  }
+
+  // Format a font-size value: keep up to 2 decimals, drop trailing zeros.
+  function _formatSize(n) {
+    const v = Number(n) || 0;
+    return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/\.?0+$/, '');
+  }
+
+  // Module-level Effects panel sync — called when active text changes
+  function syncEffectsPanel(obj) {
+    const fxPanel = document.getElementById('effects-panel');
+    if (!fxPanel || fxPanel.hidden || !obj) return;
+    const set = function (id, val) { const el = document.getElementById(id); if (el && el.value !== String(val)) el.value = val; };
+    set('fx-opacity',              Math.round((obj.opacity || 1) * 100));
+    set('fx-opacity-input',        Math.round((obj.opacity || 1) * 100));
+    set('fx-line-spacing',         Number((obj.lineHeight || 1.2).toFixed(2)));
+    set('fx-line-spacing-input',   Number((obj.lineHeight || 1.2).toFixed(2)));
+    set('fx-letter-spacing',       Number(obj.charSpacing || 0));
+    set('fx-letter-spacing-input', Number(obj.charSpacing || 0));
+
+    const shadowOn      = !!obj.shadow;
+    const fxShadow      = document.getElementById('fx-shadow');
+    const fxShadowState = document.getElementById('fx-shadow-state');
+    if (fxShadow) fxShadow.checked = shadowOn;
+    if (fxShadowState) fxShadowState.textContent = 'Text Shadow: ' + (shadowOn ? 'on' : 'off');
+
+    const strokeOn      = (obj.strokeWidth || 0) > 0;
+    const fxStroke      = document.getElementById('fx-stroke');
+    const fxStrokeState = document.getElementById('fx-stroke-state');
+    const fxStrokeCtl   = document.querySelector('#effects-panel .fx-stroke-controls');
+    if (fxStroke)      fxStroke.checked = strokeOn;
+    if (fxStrokeState) fxStrokeState.textContent = 'Text Stroke: ' + (strokeOn ? 'on' : 'off');
+    if (fxStrokeCtl)   fxStrokeCtl.hidden = !strokeOn;
+    set('fx-stroke-color',       obj.stroke || '#000000');
+    set('fx-stroke-width',       obj.strokeWidth || 0);
+    set('fx-stroke-width-input', obj.strokeWidth || 0);
+  }
+
+  function _closePopovers() {
+    const sp  = document.getElementById('ctx-spacing-panel');
+    const mp  = document.getElementById('ctx-more-panel');
+    const ap  = document.getElementById('ctx-align-popover');
+    const spT = document.getElementById('ctx-spacing-toggle');
+    const mT  = document.getElementById('ctx-more-toggle');
+    const aT  = document.getElementById('ctx-align-toggle');
+    if (sp) sp.hidden = true;
+    if (mp) mp.hidden = true;
+    if (ap) ap.hidden = true;
+    if (spT) { spT.classList.remove('ctx-active'); spT.setAttribute('aria-expanded', 'false'); }
+    if (mT)  { mT.classList.remove('ctx-active');  mT.setAttribute('aria-expanded', 'false'); }
+    if (aT)  { aT.classList.remove('ctx-active');  aT.setAttribute('aria-expanded', 'false'); }
+  }
+
+  // Pin the floating pill to the TOP of the canvas-stage, horizontally centred
+  // within the available area (Zazzle parity — toolbar does NOT follow the
+  // text). When a left-side flyout panel is open, #canvas-stage gets extra
+  // padding so the centred bar naturally shifts with the visible area.
+  function positionContextBar(/* obj */) {
+    const bar   = document.getElementById('context-bar');
+    const stage = document.getElementById('canvas-stage');
+    if (!bar || !stage) return;
+
+    // Measure the bar (temporarily reveal off-screen if needed)
+    const wasHidden = !bar.classList.contains('is-visible');
+    if (wasHidden) bar.classList.add('is-visible');
+    const barW = bar.offsetWidth || 720;
+    if (wasHidden) bar.classList.remove('is-visible');
+
+    const cs       = window.getComputedStyle(stage);
+    const padL     = parseFloat(cs.paddingLeft)  || 0;
+    const padR     = parseFloat(cs.paddingRight) || 0;
+    const stageW   = stage.clientWidth;
+    const availW   = stageW - padL - padR;
+    const TOP_GAP  = 12;
+
+    // Centre within the visible (un-padded) area of the stage
+    let left = padL + (availW - barW) / 2;
+    left = Math.max(8, Math.min(stageW - barW - 8, left));
+
+    bar.style.left = left + 'px';
+    bar.style.top  = TOP_GAP + 'px';
+    bar.removeAttribute('data-anchor');
   }
 
   function applyProp(prop, value) {
@@ -893,10 +1101,6 @@
   // source column whose angle θ on the cylinder satisfies sin(θ)/sin(halfWrap)
   // = n. So θ = asin(n · sin(halfWrap)), and srcCol = (θ/wrapDeg + 0.5)·srcW.
   // Edge columns get sampled from a wider source band → natural foreshortening.
-  // ── CSS 3D preview state ─────────────────────────────────────────────────
-  var _previewMugUrl    = '';
-  var _previewDesignUrl = '';
-
   function scheduleWarpPreview() {
     if (_warpRafPending) return;
     _warpRafPending = true;
@@ -929,117 +1133,153 @@
     return url;
   }
 
-  // ── CSS 3D cylindrical preview ───────────────────────────────────────────
+  // ── Live preview — photorealistic mug + flat design overlay (Zazzle parity) ──
   //
-  // angle = ((objCenterX / printAreaWidth) - 0.5) × wrapAngle
-  // Renders: mug PNG + multiply color tint + design overlay with perspective rotateY.
-  // No Three.js — GPU-accelerated CSS transforms only.
+  // Approach: draw the photorealistic mug photo + colour tint, then overlay
+  // the captured design onto the mug-body region of the photo at the correct
+  // relative position. NO cylinder projection, NO shading band — Zazzle's
+  // live thumbnail is essentially a flat sticker overlay; the mug photo's
+  // natural shading provides all depth cues. Print area beyond the mug body
+  // (the editor's wrap-zone metaphor) is clamped — only the visible front
+  // face renders here.
+  //
+  // Capture is SYNCHRONOUS via canvas.lowerCanvasEl snapshot. Async Image
+  // loading from data URL caused flicker during drag/rotate (60 fps events
+  // outpaced 5–10 ms image decode), so we copy the fabric canvas pixels
+  // directly into a reused offscreen canvas — zero async, zero flicker.
 
-  function calcWrapAngle(obj) {
-    var pa = getPrintAreaPx();
-    var b  = obj.getBoundingRect(true);
-    var cx = b.left + b.width / 2;
-    var t  = (cx - pa.left) / (pa.width || 1);   // 0 = left edge, 1 = right edge
-    return (t - 0.5) * 120;                        // ±60° range feels natural
+  function _captureDesignLayerCanvas() {
+    if (! canvas) return null;
+    var origBg      = canvas.backgroundImage;
+    var origBgColor = canvas.backgroundColor;
+    var guides      = canvas.getObjects().filter(function (o) { return o.excludeFromExport; });
+    guides.forEach(function (g) { g.visible = false; });
+
+    var snap = null;
+    try {
+      canvas.backgroundImage = null;
+      canvas.backgroundColor = null;
+      canvas.renderAll();          // sync render (not requestRenderAll → that defers to rAF)
+
+      var src = canvas.lowerCanvasEl;
+      if (! _liveSnapCanvas) _liveSnapCanvas = document.createElement('canvas');
+      if (_liveSnapCanvas.width  !== src.width)  _liveSnapCanvas.width  = src.width;
+      if (_liveSnapCanvas.height !== src.height) _liveSnapCanvas.height = src.height;
+      var sctx = _liveSnapCanvas.getContext('2d');
+      sctx.clearRect(0, 0, _liveSnapCanvas.width, _liveSnapCanvas.height);
+      sctx.drawImage(src, 0, 0);
+      snap = _liveSnapCanvas;
+    } catch (e) {
+      console.warn('[MugCustomizer] sync capture skipped:', e && e.message);
+    } finally {
+      canvas.backgroundImage = origBg;
+      canvas.backgroundColor = origBgColor;
+      guides.forEach(function (g) { g.visible = true; });
+      canvas.renderAll();
+    }
+    return snap;
   }
 
-  function positionDesignLayer() {
-    var mugBg = document.getElementById('preview-mug-bg');
-    if (!mugBg || !mugBg.offsetWidth) return;
+  function updateCss3dPreview(_activeObj) {
+    var liveCanvas = document.getElementById('preview-live-canvas');
+    if (! liveCanvas) return;
+    if (! _warpMugEl) return;   // mug PNG not loaded yet
 
-    var displayW = mugBg.offsetWidth;
-    var displayH = mugBg.offsetHeight;
-    var pa       = getPrintAreaPx();
+    var ctx = liveCanvas.getContext('2d');
+    var pw  = liveCanvas.width;
+    var ph  = liveCanvas.height;
 
-    var mugLeft = _mugImg ? (_mugImg.left || 0) : 30;
-    var mugTop  = _mugImg ? (_mugImg.top  || 0) : 0;
-    var mugW    = _mugImg ? _mugImg.getScaledWidth()  : 313;
-    var mugH    = _mugImg ? _mugImg.getScaledHeight() : 277;
+    // 1. Fit-draw the mug photo (preserve aspect ratio, centre in canvas)
+    var fit = Math.min(pw / _mugNaturalW, ph / _mugNaturalH);
+    var dW  = _mugNaturalW * fit;
+    var dH  = _mugNaturalH * fit;
+    var dX  = (pw - dW) / 2;
+    var dY  = (ph - dH) / 2;
+    ctx.clearRect(0, 0, pw, ph);
+    ctx.drawImage(_warpMugEl, dX, dY, dW, dH);
 
-    // Clamp the print area to the mug-on-canvas slice for the live preview.
-    // The full bleed extends past the mug (Zazzle wrap metaphor); only the
-    // intersection with the mug body shows on the actual mug face.
-    var paL = Math.max(pa.left,  mugLeft);
-    var paT = Math.max(pa.top,   mugTop);
-    var paR = Math.min(pa.left + pa.width,  mugLeft + mugW);
-    var paB = Math.min(pa.top  + pa.height, mugTop  + mugH);
+    // 2. Colour tint disabled — show the real photographed mug PNG as-is.
+    //    (Re-enable once per-colour mug photos are available.)
+
+    // 3. Overlay design onto the mug body — synchronous canvas snapshot
+    var snap = _captureDesignLayerCanvas();
+    if (! snap) return;
+
+    var pa   = getPrintAreaPx();
+    var mugL = _mugImg ? (_mugImg.left || 0) : 30;
+    var mugT = _mugImg ? (_mugImg.top  || 0) : 0;
+    var mugW = _mugImg ? _mugImg.getScaledWidth()  : 313;
+    var mugH = _mugImg ? _mugImg.getScaledHeight() : 277;
+
+    // Clamp print area to mug body — beyond the body is the wrap-zone
+    // metaphor for the editor; in the live thumbnail only the visible front
+    // face renders.
+    var paL = Math.max(pa.left, mugL);
+    var paT = Math.max(pa.top,  mugT);
+    var paR = Math.min(pa.left + pa.width,  mugL + mugW);
+    var paB = Math.min(pa.top  + pa.height, mugT  + mugH);
     var paW = Math.max(0, paR - paL);
     var paH = Math.max(0, paB - paT);
+    if (paW === 0 || paH === 0) return;
 
-    var layer = document.getElementById('preview-design-layer');
-    if (paW === 0 || paH === 0) {
-      if (layer) layer.style.display = 'none';
-      return;
+    var scaleX = dW / mugW;
+    var scaleY = dH / mugH;
+    var dstX = dX + (paL - mugL) * scaleX;
+    var dstY = dY + (paT - mugT) * scaleY;
+    var dstW = paW * scaleX;
+    var dstH = paH * scaleY;
+
+    // ── Cylinder projection (Zazzle parity) ─────────────────────────────
+    // Render the clamped design slice column-by-column with:
+    //   - Edge foreshortening:  theta = asin(norm * sin(viewHalf))
+    //                           → centre 1:1, edges compressed by sec(viewHalf)
+    //   - Banana curve:         vertical height shrinks at edges following cos(theta)
+    //                           → top/bottom edges curve inward
+    //   - Edge shading:         right side darkens, left brightens (composited
+    //                           with source-atop so it only affects design pixels)
+    // Render into _liveDesignCanvas first, then drawImage to preview canvas.
+    var VIEW_HALF_RAD   = (50 * Math.PI) / 180;     // 50° half-FOV → ~1.56× edge compression
+    var HEIGHT_SHRINK   = 0.18;                       // 0–1; how much edges curve inward vertically
+    var sinViewHalf     = Math.sin(VIEW_HALF_RAD);
+    var cosViewHalf     = Math.cos(VIEW_HALF_RAD);
+
+    var ow = Math.max(1, Math.round(dstW));
+    var oh = Math.max(1, Math.round(dstH));
+    if (! _liveDesignCanvas) _liveDesignCanvas = document.createElement('canvas');
+    if (_liveDesignCanvas.width  !== ow) _liveDesignCanvas.width  = ow;
+    if (_liveDesignCanvas.height !== oh) _liveDesignCanvas.height = oh;
+    var dctx = _liveDesignCanvas.getContext('2d');
+    dctx.clearRect(0, 0, ow, oh);
+
+    var center = ow / 2;
+    for (var ox = 0; ox < ow; ox++) {
+      var norm  = (ox - center) / center;                          // [-1, +1]
+      var theta = Math.asin(Math.max(-1, Math.min(1, norm * sinViewHalf)));
+      // Map theta back to a fractional position in the source slice
+      var t = (theta / VIEW_HALF_RAD + 1) / 2;                     // [0, 1]
+      var srcCol = paL + t * paW;
+      // Banana: edges shrink vertically; centre stays full height
+      var hFactor = 1 - HEIGHT_SHRINK * (1 - Math.cos(theta));
+      var effH    = oh * hFactor;
+      var yOff    = (oh - effH) / 2;
+      try {
+        dctx.drawImage(snap, srcCol, paT, 1, paH, ox, yOff, 1, effH);
+      } catch (e) { /* clipped slice — skip */ }
     }
 
-    var layerW = (paW / mugW) * displayW;
-    var layerH = (paH / mugH) * displayH;
+    // Edge shading — only over design pixels via source-atop
+    dctx.save();
+    dctx.globalCompositeOperation = 'source-atop';
+    var shade = dctx.createLinearGradient(0, 0, ow, 0);
+    shade.addColorStop(0,    'rgba(255,255,255,0.05)');
+    shade.addColorStop(0.45, 'rgba(0,0,0,0)');
+    shade.addColorStop(1,    'rgba(0,0,0,0.22)');
+    dctx.fillStyle = shade;
+    dctx.fillRect(0, 0, ow, oh);
+    dctx.restore();
 
-    if (layer) {
-      layer.style.display = 'block';
-      layer.style.left    = (((paL - mugLeft) / mugW) * displayW) + 'px';
-      layer.style.top     = (((paT - mugTop)  / mugH) * displayH) + 'px';
-      layer.style.width   = layerW + 'px';
-      layer.style.height  = layerH + 'px';
-      layer.style.borderRadius = '0';
-    }
-
-    // Captured design img covers full editor canvas; scale + offset so the
-    // (clamped) print-area slice fills the layer.
-    var dImg = document.getElementById('preview-design-img');
-    if (dImg) {
-      var cw = canvas ? canvas.getWidth()  : 720;
-      var ch = canvas ? canvas.getHeight() : 420;
-      var sx = layerW / paW;
-      var sy = layerH / paH;
-      dImg.style.width  = (cw * sx) + 'px';
-      dImg.style.height = (ch * sy) + 'px';
-      dImg.style.left   = (-paL * sx) + 'px';
-      dImg.style.top    = (-paT * sy) + 'px';
-    }
-  }
-
-  function applyWrapTransform(_angleDeg) {
-    // Design stays flat-attached on the mug face — no rotateY flip,
-    // no edge shading (user requested clean preview).
-    var layer = document.getElementById('preview-design-layer');
-    if (layer) layer.style.transform = 'none';
-
-    var shading = document.getElementById('preview-shading');
-    if (shading) shading.style.background = 'none';
-  }
-
-  function updateCss3dPreview(activeObj) {
-    // 1. Mug background image
-    var mugUrl = getMugUrl('front');
-    var mugBg  = document.getElementById('preview-mug-bg');
-    if (mugBg && mugUrl !== _previewMugUrl) {
-      _previewMugUrl = mugUrl;
-      mugBg.src = mugUrl;
-      mugBg.onload = function () { positionDesignLayer(); };
-    }
-
-    // 2. Color tint (multiply blend replicates Fabric BlendColor filter)
-    var tintEl = document.getElementById('preview-mug-tint');
-    if (tintEl) {
-      var hex = COLOR_HEX_MAP[(selectedVariant && selectedVariant.color || '').toLowerCase()] || '#ffffff';
-      tintEl.style.background = (hex.toLowerCase() === '#ffffff') ? 'transparent' : hex;
-    }
-
-    // 3. Capture design (full canvas, no bg) → show only print-area slice via CSS
-    var designUrl = _captureDesignLayer(1);
-    if (designUrl && designUrl !== _previewDesignUrl) {
-      _previewDesignUrl = designUrl;
-      var dImg = document.getElementById('preview-design-img');
-      if (dImg) dImg.src = designUrl;
-    }
-
-    // 4. Align design overlay to print area
-    positionDesignLayer();
-
-    // 5. Compute angle from the moving/active object (or caller-supplied obj)
-    var obj = activeObj || (canvas && canvas.getActiveObject());
-    applyWrapTransform(obj ? calcWrapAngle(obj) : 0);
+    // Composite the projected design onto the preview canvas
+    ctx.drawImage(_liveDesignCanvas, dstX, dstY);
   }
 
   // ── Per-angle cylindrical renderer ──────────────────────────────────────
@@ -1068,17 +1308,7 @@
     var drawY = (ph - drawH) / 2;
     ctx.drawImage(mugEl, drawX, drawY, drawW, drawH);
 
-    // Apply color tint so preview matches selected mug color (replicates BlendColor multiply filter)
-    var tintHex = (typeof COLOR_HEX_MAP !== 'undefined')
-      ? (COLOR_HEX_MAP[(selectedVariant && selectedVariant.color || '').toLowerCase()] || '#ffffff')
-      : '#ffffff';
-    if (tintHex.toLowerCase() !== '#ffffff') {
-      ctx.save();
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.fillStyle = tintHex;
-      ctx.fillRect(drawX, drawY, drawW, drawH);
-      ctx.restore();
-    }
+    // Colour tint disabled — show the real photographed mug PNG as-is.
 
     // Scale print-area coords (main canvas px) → preview canvas px
     var cw      = canvas.getWidth();
@@ -1415,50 +1645,160 @@
     if (modal) modal.classList.remove('open');
   }
 
+  // ── Real-photo multi-angle preview (Zazzle parity) ─────────────────────
+  // Each angle has its own photographed mug image + calibrated print-area
+  // (as a percentage of that photo's natural dimensions). The design is
+  // projected onto the print-area via cylinder-column slicing — same math
+  // as the live thumb, just per-photo.
+  var _PREVIEW_ANGLES = [
+    { key: 'left',       label: 'Left',     img: 'mug-left.jpg',        angle: -70, paPct: { x: 0.36, y: 0.30, w: 0.42, h: 0.38 } },
+    { key: 'frontLeft',  label: 'Front L',  img: 'mug-front-left.jpg',  angle: -35, paPct: { x: 0.36, y: 0.32, w: 0.40, h: 0.34 } },
+    { key: 'center',     label: 'Center',   img: 'mug-center.jpg',      angle:   0, paPct: { x: 0.32, y: 0.34, w: 0.40, h: 0.32 } },
+    { key: 'frontRight', label: 'Front R',  img: 'mug-front-right.jpg', angle:  35, paPct: { x: 0.26, y: 0.32, w: 0.40, h: 0.34 } },
+    { key: 'right',      label: 'Right',    img: 'mug-right.jpg',       angle:  70, paPct: { x: 0.24, y: 0.30, w: 0.42, h: 0.38 } },
+    { key: 'handle',     label: 'Handle',   img: 'mug-handle.jpg',      angle: 130, paPct: null },
+    { key: 'donut',      label: 'Top View', img: 'mug-donut.jpg',       angle: -999, paPct: null, isDonut: true },
+  ];
+
+  var _previewPhotoCache = {};
+  function _loadPreviewPhoto(filename, cb) {
+    if (_previewPhotoCache[filename]) { cb(_previewPhotoCache[filename]); return; }
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function () { _previewPhotoCache[filename] = img; cb(img); };
+    img.onerror = function () { cb(null); };
+    img.src = mc.pluginUrl + 'public/assets/images/' + filename;
+  }
+
+  function _angleByKey(key) {
+    for (var i = 0; i < _PREVIEW_ANGLES.length; i++) {
+      if (_PREVIEW_ANGLES[i].key === key) return _PREVIEW_ANGLES[i];
+    }
+    return null;
+  }
+
+  // Render a real-photo angle view: cover-fit photo + project design onto
+  // its calibrated print-area via cylinder-column slicing.
+  function renderRealAngleView(ctx, pw, ph, designImg, photoEl, paPct, viewAngleDeg) {
+    ctx.clearRect(0, 0, pw, ph);
+
+    var natW  = (photoEl && (photoEl.naturalWidth  || photoEl.width))  || 1;
+    var natH  = (photoEl && (photoEl.naturalHeight || photoEl.height)) || 1;
+    var fit   = Math.min(pw / natW, ph / natH);
+    var drawW = natW * fit;
+    var drawH = natH * fit;
+    var drawX = (pw - drawW) / 2;
+    var drawY = (ph - drawH) / 2;
+    if (photoEl) ctx.drawImage(photoEl, drawX, drawY, drawW, drawH);
+
+    if (!paPct || !designImg) return;
+
+    // Print-area on the displayed photo (in preview canvas px)
+    var paLeft   = drawX + paPct.x * drawW;
+    var paTop    = drawY + paPct.y * drawH;
+    var paWidth  = paPct.w * drawW;
+    var paHeight = paPct.h * drawH;
+
+    // Source = the editor's flat unwrap (canvas px)
+    var src      = getPrintAreaPx();
+    var halfWrap = ((src.wrapDeg || 360) * Math.PI) / 360;
+    var viewHalf = 50 * Math.PI / 180;
+    var viewRad  = viewAngleDeg * Math.PI / 180;
+    var sinViewHalf = Math.sin(viewHalf);
+    var cols     = Math.max(1, Math.round(paWidth));
+    var center   = cols / 2;
+
+    for (var ox = 0; ox < cols; ox++) {
+      var norm  = (ox - center) / center;
+      var theta = viewRad + Math.asin(Math.max(-1, Math.min(1, norm * sinViewHalf)));
+      var t     = theta / (2 * halfWrap) + 0.5;
+      if (t < 0 || t > 1) continue;
+      var srcCol = src.left + t * src.width;
+      try {
+        ctx.drawImage(designImg, srcCol, src.top, 1, src.height,
+                                 paLeft + ox, paTop, 1, paHeight);
+      } catch (e) {}
+    }
+
+    // Subtle edge shading on top — photo already has lighting, so only a hint
+    var ambient = 0.55;
+    var thetaL  = viewRad - viewHalf, thetaR = viewRad + viewHalf;
+    var darkL   = ((1 - (ambient + (1 - ambient) * Math.max(0, Math.cos(thetaL)))) * 0.45).toFixed(3);
+    var darkR   = ((1 - (ambient + (1 - ambient) * Math.max(0, Math.cos(thetaR)))) * 0.45).toFixed(3);
+    var grad    = ctx.createLinearGradient(paLeft, 0, paLeft + paWidth, 0);
+    grad.addColorStop(0, 'rgba(0,0,0,' + darkL + ')');
+    grad.addColorStop(0.5, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(0,0,0,' + darkR + ')');
+    ctx.fillStyle = grad;
+    ctx.fillRect(paLeft, paTop, paWidth, paHeight);
+  }
+
   function _renderFullPreview(modal) {
-    var origBg    = canvas.backgroundImage;
     var designUrl = _captureDesignLayer(1);
-    var mugEl     = origBg && origBg._element;
     if (!designUrl) return;
-    var natW = _mugNaturalW || (mugEl && (mugEl.naturalWidth  || mugEl.width))  || 0;
-    var natH = _mugNaturalH || (mugEl && (mugEl.naturalHeight || mugEl.height)) || 0;
-    var pa   = getPrintAreaPx();
 
     var designImg = new Image();
     designImg.onload = function () {
-      // Render all modal thumbnails
+      // Render every thumbnail using its angle-specific photo
       modal.querySelectorAll('.preview-modal-thumb').forEach(function (thumb) {
         var cv = thumb.querySelector('canvas');
         if (!cv) return;
         var tCtx = cv.getContext('2d');
-        if (thumb.dataset.isDonut === 'true') {
-          renderDonutView(tCtx, cv.width, cv.height, designImg, pa);
+        var key  = thumb.dataset.angleKey || 'center';
+        var ang  = _angleByKey(key);
+        if (!ang) return;
+        if (ang.isDonut) {
+          _loadPreviewPhoto(ang.img, function (photoEl) {
+            // Donut: still uses canvas-2D ring projection over the donut photo
+            tCtx.clearRect(0, 0, cv.width, cv.height);
+            if (photoEl) {
+              var fit = Math.min(cv.width / photoEl.naturalWidth, cv.height / photoEl.naturalHeight);
+              var dW = photoEl.naturalWidth * fit, dH = photoEl.naturalHeight * fit;
+              tCtx.drawImage(photoEl, (cv.width - dW)/2, (cv.height - dH)/2, dW, dH);
+            }
+            // Overlay donut design ring on top
+            renderDonutView(tCtx, cv.width, cv.height, designImg, getPrintAreaPx());
+          });
         } else {
-          renderAngleView(tCtx, cv.width, cv.height, designImg, mugEl,
-                          natW, natH, pa, parseFloat(thumb.dataset.angle || '0'));
+          _loadPreviewPhoto(ang.img, function (photoEl) {
+            renderRealAngleView(tCtx, cv.width, cv.height, designImg, photoEl, ang.paPct, ang.angle);
+          });
         }
       });
 
-      // Render main canvas for currently active thumb
-      _renderModalMainCanvas(modal, designImg, mugEl, natW, natH, pa);
+      _renderModalMainCanvas(modal, designImg);
     };
     designImg.src = designUrl;
   }
 
-  function _renderModalMainCanvas(modal, designImg, mugEl, natW, natH, pa) {
-    var active  = modal.querySelector('.preview-modal-thumb.active');
-    var isDonut = active && active.dataset.isDonut === 'true';
+  function _renderModalMainCanvas(modal, designImg) {
+    var mainCv = document.getElementById('preview-modal-canvas');
+    if (!mainCv) return;
+    mainCv.style.display = 'block';
+    _showThreeView(false); // real-photo pipeline replaces Three.js
 
-    if (isDonut) {
-      _showThreeView(false);
-      var mainCv = document.getElementById('preview-modal-canvas');
-      if (!mainCv) return;
-      renderDonutView(mainCv.getContext('2d'), mainCv.width, mainCv.height, designImg, pa);
-    } else {
-      _showThreeView(true);
-      var deg = active ? parseFloat(active.dataset.angle || '0') : 0;
-      createMugPreview(designImg, deg);
+    var active = modal.querySelector('.preview-modal-thumb.active');
+    var key    = active ? (active.dataset.angleKey || 'center') : 'center';
+    var ang    = _angleByKey(key);
+    if (!ang) return;
+    var ctx    = mainCv.getContext('2d');
+
+    if (ang.isDonut) {
+      _loadPreviewPhoto(ang.img, function (photoEl) {
+        ctx.clearRect(0, 0, mainCv.width, mainCv.height);
+        if (photoEl) {
+          var fit = Math.min(mainCv.width / photoEl.naturalWidth, mainCv.height / photoEl.naturalHeight);
+          var dW = photoEl.naturalWidth * fit, dH = photoEl.naturalHeight * fit;
+          ctx.drawImage(photoEl, (mainCv.width - dW)/2, (mainCv.height - dH)/2, dW, dH);
+        }
+        renderDonutView(ctx, mainCv.width, mainCv.height, designImg, getPrintAreaPx());
+      });
+      return;
     }
+
+    _loadPreviewPhoto(ang.img, function (photoEl) {
+      renderRealAngleView(ctx, mainCv.width, mainCv.height, designImg, photoEl, ang.paPct, ang.angle);
+    });
   }
 
   // ── Print Export — design-only at production DPI ─────────────────────────
@@ -1574,17 +1914,19 @@
     }, 30000);
   }
 
-  // ── Navigate to Review ────────────────────────────────────────────────────
-  function goToReview() {
-    const design = serializeDesign(true); // 4× high-res
+  // Bridge to bindUI's setTab (assigned during bindUI())
+  var _setActiveTab = null;
 
-    if (! design.canvas_json.objects || design.canvas_json.objects.length === 0) {
+  // ── Switch to Review tab (in-page) ─────────────────────────────────────
+  function goToReview() {
+    const objs = canvas.getObjects().filter(function (o) { return !o.excludeFromExport; });
+    if (objs.length === 0) {
       showToast('Please add at least one design element before reviewing.');
       return;
     }
-
-    saveToSession(design);
-    window.location.href = cfg.reviewUrl;
+    if (typeof _setActiveTab === 'function') {
+      _setActiveTab('review');
+    }
   }
 
   // ── Toast ─────────────────────────────────────────────────────────────────
@@ -1603,9 +1945,9 @@
 
   // ── Canvas Events ─────────────────────────────────────────────────────────
   function bindCanvasEvents() {
-    canvas.on('object:added',    function () { if (!isHistoryLock) pushHistory(); updateMiniPreview(); updateLayerPanel(); setSaveStatus('● Unsaved', '#f59e0b'); });
+    canvas.on('object:added',    function () { if (!isHistoryLock) pushHistory(); updateMiniPreview(); updateLayerPanel(); updateDimLabelVisibility(); setSaveStatus('● Unsaved', '#f59e0b'); });
     canvas.on('object:modified', function () { if (!isHistoryLock) pushHistory(); updateMiniPreview(); updateLayerPanel(); setSaveStatus('● Unsaved', '#f59e0b'); });
-    canvas.on('object:removed',  function () { if (!isHistoryLock) pushHistory(); updateMiniPreview(); updateLayerPanel(); setSaveStatus('● Unsaved', '#f59e0b'); });
+    canvas.on('object:removed',  function () { if (!isHistoryLock) pushHistory(); updateMiniPreview(); updateLayerPanel(); updateDimLabelVisibility(); setSaveStatus('● Unsaved', '#f59e0b'); });
 
     canvas.on('selection:created', function (e) { showContextBar(e.selected[0]); updateLayerPanel(); });
     canvas.on('selection:updated', function (e) { showContextBar(e.selected[0]); updateLayerPanel(); });
@@ -1613,9 +1955,9 @@
 
     // Free drag/scale/rotate — no snapping, no hard clamp.
     // A soft toast fires once when the design leaves the print area.
-    canvas.on('object:moving',   function (e) { updateCss3dPreview(e.target); warnIfOutside(e.target); });
-    canvas.on('object:scaling',  function (e) { updateCss3dPreview(e.target); });
-    canvas.on('object:modified', function ()  { clearGuides(); });
+    canvas.on('object:moving',   function (e) { updateCss3dPreview(e.target); warnIfOutside(e.target); positionContextBar(e.target); });
+    canvas.on('object:scaling',  function (e) { updateCss3dPreview(e.target); positionContextBar(e.target); });
+    canvas.on('object:modified', function (e) { clearGuides(); if (e && e.target) positionContextBar(e.target); });
 
     // C7 — scroll-wheel zoom
     canvas.on('mouse:wheel', function (opt) {
@@ -1640,6 +1982,13 @@
       if (a1) a1.value = deg;
       if (a2) a2.value = deg;
       updateCss3dPreview(obj);
+      positionContextBar(obj);
+    });
+
+    // Reposition floating context bar on viewport resize
+    window.addEventListener('resize', function () {
+      const obj = canvas.getActiveObject();
+      if (obj) positionContextBar(obj);
     });
 
     // P3 — Space + drag to pan canvas
@@ -1805,10 +2154,11 @@
 
     // ── Tool rail — unified flyout panel switching (Zazzle parity) ─────
     const TOOL_PANEL_MAP = {
-      'tool-text':    'text-panel',
-      'tool-uploads': 'uploads-panel',
-      'tool-images':  'images-panel',
-      'tool-layers':  'layer-panel',
+      'tool-text':       'text-panel',
+      'tool-uploads':    'uploads-panel',
+      'tool-images':     'images-panel',
+      'tool-background': 'background-panel',
+      'tool-layers':     'layer-panel',
     };
     const uploadInput = document.getElementById('mug-upload-input');
 
@@ -1840,11 +2190,14 @@
 
     Object.keys(TOOL_PANEL_MAP).forEach(function (toolId) {
       const tool = document.getElementById(toolId);
-      if (tool) tool.addEventListener('click', function () { openPanel(toolId); });
+      if (tool) tool.addEventListener('click', function () {
+        openPanel(toolId);
+        if (toolId === 'tool-background') renderBgPresets();
+      });
     });
 
     // Panel close buttons
-    ['text-panel-close', 'uploads-panel-close', 'images-panel-close', 'layer-panel-close'].forEach(function (id) {
+    ['text-panel-close', 'uploads-panel-close', 'images-panel-close', 'background-panel-close', 'layer-panel-close'].forEach(function (id) {
       const el = document.getElementById(id);
       if (el) el.addEventListener('click', closeAllPanels);
     });
@@ -1922,6 +2275,141 @@
       });
     }
 
+    // ── Settings popover (gear icon at bottom of canvas) ────────────────────
+    const setBtn      = document.getElementById('btn-zoom-settings');
+    const setPopover  = document.getElementById('settings-popover');
+    if (setBtn && setPopover) {
+      setBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var open = setPopover.hidden;
+        setPopover.hidden = !open;
+        setBtn.setAttribute('aria-expanded', String(open));
+      });
+      // Outside click closes
+      document.addEventListener('click', function (e) {
+        if (setPopover.hidden) return;
+        if (setPopover.contains(e.target) || setBtn.contains(e.target)) return;
+        setPopover.hidden = true;
+        setBtn.setAttribute('aria-expanded', 'false');
+      });
+    }
+
+    // 1. Dark mode — toggle CSS class on body
+    const setDark = document.getElementById('set-dark-mode');
+    if (setDark) setDark.addEventListener('change', function () {
+      document.body.classList.toggle('mug-dark', this.checked);
+    });
+
+    // 2. Lock aspect ratio — toggle uniform scaling on all current + future objects
+    const setLockAspect = document.getElementById('set-lock-aspect');
+    if (setLockAspect) {
+      setLockAspect.addEventListener('change', function () {
+        const lock = this.checked;
+        canvas.uniScaleKey = null; // disable Shift-toggle behaviour
+        canvas.getObjects().forEach(function (o) {
+          if (!o.excludeFromExport) o.lockUniScaling = lock;
+        });
+        // Apply to future objects via a flag
+        canvas._mugLockAspect = lock;
+      });
+      // Initial state — enabled by default
+      canvas._mugLockAspect = setLockAspect.checked;
+      canvas.on('object:added', function (e) {
+        if (canvas._mugLockAspect && e.target && !e.target.excludeFromExport) {
+          e.target.lockUniScaling = true;
+        }
+      });
+    }
+
+    // 3. Snapping — soft grid snap during drag (10px grid)
+    const setSnap = document.getElementById('set-snapping');
+    canvas._mugSnap = setSnap ? setSnap.checked : true;
+    if (setSnap) {
+      setSnap.addEventListener('change', function () { canvas._mugSnap = this.checked; });
+    }
+    canvas.on('object:moving', function (e) {
+      if (!canvas._mugSnap || !e.target || e.target.excludeFromExport) return;
+      const grid = 10;
+      e.target.set({
+        left: Math.round(e.target.left / grid) * grid,
+        top:  Math.round(e.target.top  / grid) * grid,
+      });
+    });
+
+    // 4. Show all guidelines — toggle visibility of print-area guides
+    const setGuides = document.getElementById('set-guidelines');
+    if (setGuides) setGuides.addEventListener('change', function () {
+      const show = this.checked;
+      _printAreaGuides.forEach(function (o) { o.visible = show; });
+      canvas.requestRenderAll();
+    });
+
+    // 5. Show gridlines — overlay grid div over canvas wrapper
+    const setGrid = document.getElementById('set-gridlines');
+    if (setGrid) setGrid.addEventListener('change', function () {
+      const wrapper = canvas.wrapperEl;
+      if (!wrapper) return;
+      let grid = wrapper.querySelector('.canvas-gridlines');
+      if (this.checked) {
+        if (!grid) {
+          grid = document.createElement('div');
+          grid.className = 'canvas-gridlines';
+          grid.style.left   = '0';
+          grid.style.top    = '0';
+          grid.style.width  = canvas.getWidth()  + 'px';
+          grid.style.height = canvas.getHeight() + 'px';
+          wrapper.appendChild(grid);
+        }
+      } else if (grid) {
+        grid.remove();
+      }
+    });
+
+    // 6. Show bleed mask — overlay dashed red rect at print area
+    const setBleed = document.getElementById('set-bleed-mask');
+    if (setBleed) setBleed.addEventListener('change', function () {
+      const wrapper = canvas.wrapperEl;
+      if (!wrapper) return;
+      let mask = wrapper.querySelector('.canvas-bleed-mask');
+      if (this.checked) {
+        const pa = getPrintAreaPx();
+        if (!mask) {
+          mask = document.createElement('div');
+          mask.className = 'canvas-bleed-mask';
+          wrapper.appendChild(mask);
+        }
+        mask.style.left   = pa.left   + 'px';
+        mask.style.top    = pa.top    + 'px';
+        mask.style.width  = pa.width  + 'px';
+        mask.style.height = pa.height + 'px';
+      } else if (mask) {
+        mask.remove();
+      }
+    });
+
+    // 7. Show transparency — checkboard pattern as canvas background
+    const setTrans = document.getElementById('set-transparency');
+    if (setTrans) setTrans.addEventListener('change', function () {
+      const wrapper = canvas.wrapperEl;
+      if (!wrapper) return;
+      let checker = wrapper.querySelector('.canvas-checker');
+      if (this.checked) {
+        if (!checker) {
+          checker = document.createElement('div');
+          checker.className = 'canvas-checker';
+          checker.style.left   = '0';
+          checker.style.top    = '0';
+          checker.style.width  = canvas.getWidth()  + 'px';
+          checker.style.height = canvas.getHeight() + 'px';
+          wrapper.insertBefore(checker, wrapper.firstChild);
+        }
+        canvas.setBackgroundColor('rgba(0,0,0,0)', canvas.requestRenderAll.bind(canvas));
+      } else {
+        if (checker) checker.remove();
+        canvas.setBackgroundColor('#f3f5f8', canvas.requestRenderAll.bind(canvas));
+      }
+    });
+
     // Drag-and-drop image upload over the canvas stage
     const stage   = document.getElementById('canvas-stage');
     const dropOv  = document.getElementById('drop-overlay');
@@ -1957,7 +2445,7 @@
     if (undoBtn) undoBtn.addEventListener('click', undo);
     if (redoBtn) redoBtn.addEventListener('click', redo);
 
-    // ── Top-bar tab switching (Design / Options / Review) ──────────────
+    // ── Top-bar tab switching (Design / Options / Review — all in-page) ──
     let activeTab = 'design';
     const tabEls       = document.querySelectorAll('.topbar-tabs .tab');
     const optsPanel    = document.getElementById('options-panel');
@@ -1967,6 +2455,8 @@
     const canvasEl     = document.getElementById('canvas-container');
     const zoomCtrls    = document.getElementById('zoom-controls');
     const nextBtn      = document.getElementById('btn-next-review');
+    const canvasStage  = document.getElementById('canvas-stage');
+    const reviewPage   = document.getElementById('review-page');
 
     function setTab(tab) {
       activeTab = tab;
@@ -1975,25 +2465,44 @@
       });
       const designVisible = (tab === 'design');
       const optsVisible   = (tab === 'options');
+      const reviewVisible = (tab === 'review');
+
+      // Hide tool rail, panels, canvas, zoom controls when not on Design
       if (tabToolRail)  tabToolRail.style.display  = designVisible ? '' : 'none';
-      if (tabTextPanel && designVisible === false) tabTextPanel.style.display = 'none';
+      if (tabTextPanel && !designVisible) tabTextPanel.style.display = 'none';
       if (canvasEl)  canvasEl.style.display  = designVisible ? '' : 'none';
       if (zoomCtrls) zoomCtrls.style.display = designVisible ? '' : 'none';
       if (variantPn) variantPn.style.display = designVisible ? '' : 'none';
       if (optsPanel) optsPanel.style.display = optsVisible ? '' : 'none';
+
+      // Swap canvas-stage ↔ review-page sections
+      if (canvasStage) canvasStage.style.display = reviewVisible ? 'none' : '';
+      if (reviewPage) {
+        if (reviewVisible) {
+          reviewPage.hidden = false;
+          if (typeof renderReviewPage === 'function') renderReviewPage();
+        } else {
+          reviewPage.hidden = true;
+        }
+      }
+
       if (nextBtn) {
         const lbl = (tab === 'design')
           ? nextBtn.dataset.designLabel
           : nextBtn.dataset.optionsLabel;
         if (lbl) nextBtn.textContent = lbl;
+        // Hide the Next button on Review (final step)
+        nextBtn.style.display = reviewVisible ? 'none' : '';
       }
     }
+    // Expose for module-level callers (goToReview)
+    _setActiveTab = setTab;
 
     tabEls.forEach(function (el) {
       el.addEventListener('click', function (e) {
         const tab = el.dataset.tab;
-        if (tab === 'review') { e.preventDefault(); goToReview(); return; }
         e.preventDefault();
+        if (tab === 'review') { goToReview(); return; }
         setTab(tab);
       });
     });
@@ -2007,13 +2516,14 @@
       });
     }
 
+    // ── Review page wiring ─────────────────────────────────────────────────
+    bindReviewPage();
+
     // Zoom
     const zoomOut = document.getElementById('btn-zoom-out');
     const zoomIn  = document.getElementById('btn-zoom-in');
-    const zoomFit = document.getElementById('btn-zoom-fit');
     if (zoomOut) zoomOut.addEventListener('click', function () { setZoom(canvas.getZoom() - 0.25); });
     if (zoomIn)  zoomIn.addEventListener('click',  function () { setZoom(canvas.getZoom() + 0.25); });
-    if (zoomFit) zoomFit.addEventListener('click', function () { setZoom(1); });
 
     // Zoom dropdown menu — click pill to toggle, click option to set zoom
     const zoomDisplay = document.getElementById('zoom-display');
@@ -2052,12 +2562,29 @@
     }
 
     // Context bar — text properties
-    const ctxFont  = document.getElementById('ctx-font');
-    const ctxSize  = document.getElementById('ctx-size');   // hidden, kept for compat
-    const ctxColor = document.getElementById('ctx-color');
-    if (ctxFont)  ctxFont.addEventListener('change',  function () { applyTextProp('fontFamily', this.value); });
-    if (ctxSize)  ctxSize.addEventListener('change',  function () { applyTextProp('fontSize', parseInt(this.value, 10)); });
-    if (ctxColor) ctxColor.addEventListener('input',  function () { applyTextProp('fill', this.value); });
+    const ctxFont        = document.getElementById('ctx-font');
+    const ctxFontPreview = document.getElementById('ctx-font-preview');
+    const ctxSize        = document.getElementById('ctx-size');        // legacy hidden
+    const ctxSizeInput   = document.getElementById('ctx-size-input');  // visible decimal input
+    const ctxColor       = document.getElementById('ctx-color');
+
+    if (ctxFont) {
+      ctxFont.addEventListener('change', function () {
+        applyTextProp('fontFamily', this.value);
+        if (ctxFontPreview) {
+          ctxFontPreview.textContent = this.value;
+          ctxFontPreview.style.fontFamily = this.value;
+        }
+        // Re-evaluate B/I disabled state on font change
+        const obj = canvas.getActiveObject();
+        if (obj) showContextBar(obj);
+      });
+    }
+    if (ctxSize)  ctxSize.addEventListener('change',  function () { applyTextProp('fontSize', parseFloat(this.value) || 24); });
+    if (ctxColor) ctxColor.addEventListener('input',  function () {
+      applyTextProp('fill', this.value);
+      ctxColor.style.background = this.value;
+    });
 
     // "Edit text" button — enters IText editing mode
     const ctxEditText = document.getElementById('ctx-edit-text');
@@ -2068,20 +2595,32 @@
       });
     }
 
-    // Font size — and + buttons
+    // Font size: − / + steppers + decimal input
     const ctxSizeVal   = document.getElementById('ctx-size-val');
     const ctxSizeMinus = document.getElementById('ctx-size-minus');
     const ctxSizePlus  = document.getElementById('ctx-size-plus');
+    function _setFontSize(value) {
+      const obj = canvas.getActiveObject();
+      if (!obj) return;
+      const s = Math.min(200, Math.max(6, Number(value) || 0));
+      applyProp('fontSize', s);
+      if (ctxSizeInput) ctxSizeInput.value = _formatSize(s);
+      if (ctxSizeVal)   ctxSizeVal.textContent = _formatSize(s);
+      if (ctxSize)      ctxSize.value = s;
+    }
     function _changeFontSize(delta) {
       const obj = canvas.getActiveObject();
       if (!obj) return;
-      const s = Math.min(200, Math.max(8, (obj.fontSize || 24) + delta));
-      applyProp('fontSize', s);
-      if (ctxSizeVal) ctxSizeVal.textContent = s;
-      if (ctxSize)    ctxSize.value = s;
+      _setFontSize((obj.fontSize || 24) + delta);
     }
-    if (ctxSizeMinus) ctxSizeMinus.addEventListener('click', function () { _changeFontSize(-2); });
-    if (ctxSizePlus)  ctxSizePlus.addEventListener('click',  function () { _changeFontSize(+2); });
+    if (ctxSizeMinus) ctxSizeMinus.addEventListener('click', function () { _changeFontSize(-1); });
+    if (ctxSizePlus)  ctxSizePlus.addEventListener('click',  function () { _changeFontSize(+1); });
+    if (ctxSizeInput) {
+      ctxSizeInput.addEventListener('change', function () { _setFontSize(this.value); });
+      ctxSizeInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { _setFontSize(this.value); this.blur(); }
+      });
+    }
 
     // Alignment dropdown (replaces 3 separate buttons)
     const ctxAlignSel = document.getElementById('ctx-align-select');
@@ -2097,16 +2636,471 @@
       });
     });
 
-    // "More options" toggle
+    // Spacing dropdown (☰ ▾) — opens popover with letter-spacing + line-height sliders
+    const ctxSpacingToggle = document.getElementById('ctx-spacing-toggle');
+    const ctxSpacingPanel  = document.getElementById('ctx-spacing-panel');
+    if (ctxSpacingToggle && ctxSpacingPanel) {
+      ctxSpacingToggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const open = ctxSpacingPanel.hidden;
+        // Close other popover
+        const mp = document.getElementById('ctx-more-panel');
+        const mT = document.getElementById('ctx-more-toggle');
+        if (mp) mp.hidden = true;
+        if (mT) { mT.classList.remove('ctx-active'); mT.setAttribute('aria-expanded', 'false'); }
+        ctxSpacingPanel.hidden = !open;
+        ctxSpacingToggle.classList.toggle('ctx-active', open);
+        ctxSpacingToggle.setAttribute('aria-expanded', String(open));
+      });
+    }
+
+    // "More options" (▶) — opens panel with rotation, stroke, layer order, duplicate
     const ctxMoreToggle = document.getElementById('ctx-more-toggle');
     const ctxMorePanel  = document.getElementById('ctx-more-panel');
     if (ctxMoreToggle && ctxMorePanel) {
-      ctxMoreToggle.addEventListener('click', function () {
-        const open = ctxMorePanel.style.display !== 'flex';
-        ctxMorePanel.style.display = open ? 'flex' : 'none';
+      ctxMoreToggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const open = ctxMorePanel.hidden;
+        // Close other popover
+        if (ctxSpacingPanel) ctxSpacingPanel.hidden = true;
+        if (ctxSpacingToggle) { ctxSpacingToggle.classList.remove('ctx-active'); ctxSpacingToggle.setAttribute('aria-expanded', 'false'); }
+        ctxMorePanel.hidden = !open;
         ctxMoreToggle.classList.toggle('ctx-active', open);
+        ctxMoreToggle.setAttribute('aria-expanded', String(open));
       });
     }
+
+    // ── Alignment popover (Zazzle parity rich panel) ────────────────────────
+    const ctxAlignToggle  = document.getElementById('ctx-align-toggle');
+    const ctxAlignPopover = document.getElementById('ctx-align-popover');
+    if (ctxAlignToggle && ctxAlignPopover) {
+      ctxAlignToggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const open = ctxAlignPopover.hidden;
+        if (ctxSpacingPanel) ctxSpacingPanel.hidden = true;
+        if (ctxMorePanel)    ctxMorePanel.hidden    = true;
+        if (ctxSpacingToggle) { ctxSpacingToggle.classList.remove('ctx-active'); ctxSpacingToggle.setAttribute('aria-expanded', 'false'); }
+        if (ctxMoreToggle)    { ctxMoreToggle.classList.remove('ctx-active');    ctxMoreToggle.setAttribute('aria-expanded', 'false'); }
+        ctxAlignPopover.hidden = !open;
+        ctxAlignToggle.classList.toggle('ctx-active', open);
+        ctxAlignToggle.setAttribute('aria-expanded', String(open));
+      });
+    }
+
+    // Print-area artboard rect — used as the alignment reference frame
+    function _getArtboardRect() {
+      const pa = (typeof MUG_VIEWS !== 'undefined' && MUG_VIEWS.center && MUG_VIEWS.center.printArea)
+        ? MUG_VIEWS.center.printArea
+        : { x: 140, y: 110, w: 540, h: 200 };
+      return { left: pa.x, top: pa.y, right: pa.x + pa.w, bottom: pa.y + pa.h, w: pa.w, h: pa.h };
+    }
+
+    // Resolve alignment reference frame (Artboard = print area, Selection = canvas)
+    function _getAlignFrame() {
+      const ref = (document.querySelector('input[name="ctx-align-to"]:checked') || {}).value || 'artboard';
+      if (ref === 'selection') return { left: 0, top: 0, right: canvas.getWidth(), bottom: canvas.getHeight(), w: canvas.getWidth(), h: canvas.getHeight() };
+      return _getArtboardRect();
+    }
+
+    // Position-align the active object inside the resolved reference frame.
+    // Uses delta-from-bbox math so it works for any origin / rotation / scale.
+    function _alignActive(direction) {
+      const obj = canvas.getActiveObject();
+      if (!obj) return;
+
+      // Defensive: clear tiling clones (so the original text is the visible one
+      // being aligned) and make sure object is visible / opaque / on top.
+      if (obj._tileClones) _clearTiles(obj);
+      obj.visible = true;
+      if (!(obj.opacity > 0)) obj.set('opacity', 1);
+      canvas.bringToFront(obj);
+
+      const ab = _getAlignFrame();
+      const bb = obj.getBoundingRect(true, true);
+
+      let targetLeft = bb.left;
+      let targetTop  = bb.top;
+      switch (direction) {
+        case 'left':   targetLeft = ab.left; break;
+        case 'center': targetLeft = ab.left + (ab.w - bb.width)  / 2; break;
+        case 'right':  targetLeft = ab.right - bb.width; break;
+        case 'top':    targetTop  = ab.top; break;
+        case 'middle': targetTop  = ab.top  + (ab.h - bb.height) / 2; break;
+        case 'bottom': targetTop  = ab.bottom - bb.height; break;
+      }
+
+      // Shift the object by the delta — works regardless of origin/transforms
+      const dx = targetLeft - bb.left;
+      const dy = targetTop  - bb.top;
+      obj.set({ left: obj.left + dx, top: obj.top + dy });
+      obj.setCoords();
+      canvas.requestRenderAll();
+      pushHistory();
+      updateCss3dPreview(obj);
+
+      // Visual feedback — brief active highlight on clicked button
+      const btn = document.querySelector('#ctx-align-popover .ctx-pop-btn[data-align="' + direction + '"]');
+      if (btn) {
+        btn.classList.add('is-active');
+        setTimeout(function () { btn.classList.remove('is-active'); }, 220);
+      }
+    }
+
+    // Distribute (single-object stretch to fill reference frame on chosen axis)
+    function _distributeActive(axis) {
+      const obj = canvas.getActiveObject();
+      if (!obj) return;
+      const ab = _getAlignFrame();
+      const bb = obj.getBoundingRect(true, true);
+      if (axis === 'h') {
+        const factor = ab.w / bb.width;
+        obj.set('scaleX', (obj.scaleX || 1) * factor);
+        obj.set('left', ab.left + (obj.left - bb.left) * factor);
+      } else {
+        const factor = ab.h / bb.height;
+        obj.set('scaleY', (obj.scaleY || 1) * factor);
+        obj.set('top', ab.top + (obj.top - bb.top) * factor);
+      }
+      obj.setCoords(); canvas.requestRenderAll(); pushHistory(); updateCss3dPreview(obj);
+    }
+
+    // Keep popover open when clicking anywhere inside it
+    if (ctxAlignPopover) {
+      ctxAlignPopover.addEventListener('click', function (e) { e.stopPropagation(); });
+    }
+
+    document.querySelectorAll('#ctx-align-popover .ctx-align-grid .ctx-pop-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        _alignActive(btn.getAttribute('data-align'));
+      });
+    });
+
+    // Flip H / V
+    const ctxFlipH = document.getElementById('ctx-flip-h');
+    const ctxFlipV = document.getElementById('ctx-flip-v');
+    if (ctxFlipH) ctxFlipH.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const obj = canvas.getActiveObject(); if (!obj) return;
+      obj.set('flipX', !obj.flipX); canvas.requestRenderAll(); pushHistory(); updateCss3dPreview(obj);
+    });
+    if (ctxFlipV) ctxFlipV.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const obj = canvas.getActiveObject(); if (!obj) return;
+      obj.set('flipY', !obj.flipY); canvas.requestRenderAll(); pushHistory(); updateCss3dPreview(obj);
+    });
+
+    // Scale −/+ (10% per click)
+    const ctxScaleDown = document.getElementById('ctx-scale-down');
+    const ctxScaleUp   = document.getElementById('ctx-scale-up');
+    function _scaleBy(factor) {
+      const obj = canvas.getActiveObject(); if (!obj) return;
+      const sx = (obj.scaleX || 1) * factor;
+      const sy = (obj.scaleY || 1) * factor;
+      obj.set({ scaleX: Math.min(8, Math.max(0.1, sx)), scaleY: Math.min(8, Math.max(0.1, sy)) });
+      obj.setCoords(); canvas.requestRenderAll(); pushHistory(); updateCss3dPreview(obj);
+    }
+    if (ctxScaleDown) ctxScaleDown.addEventListener('click', function (e) { e.stopPropagation(); _scaleBy(0.9); });
+    if (ctxScaleUp)   ctxScaleUp.addEventListener('click',   function (e) { e.stopPropagation(); _scaleBy(1.1); });
+
+    // Distribute (single-object stretch to the chosen reference frame)
+    const ctxDistH = document.getElementById('ctx-distribute-h');
+    const ctxDistV = document.getElementById('ctx-distribute-v');
+    if (ctxDistH) ctxDistH.addEventListener('click', function (e) { e.stopPropagation(); _distributeActive('h'); });
+    if (ctxDistV) ctxDistV.addEventListener('click', function (e) { e.stopPropagation(); _distributeActive('v'); });
+
+    // Rotate CCW / input / CW
+    const ctxRotateCcw   = document.getElementById('ctx-rotate-ccw');
+    const ctxRotateCw    = document.getElementById('ctx-rotate-cw');
+    const ctxRotateInput = document.getElementById('ctx-rotate-input');
+    function _setAngle(a) {
+      const obj = canvas.getActiveObject(); if (!obj) return;
+      const norm = ((a % 360) + 360) % 360;
+      obj.set('angle', norm); obj.setCoords();
+      canvas.requestRenderAll(); pushHistory(); updateCss3dPreview(obj);
+      if (ctxRotateInput) ctxRotateInput.value = Math.round(norm);
+    }
+    if (ctxRotateCcw) ctxRotateCcw.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const obj = canvas.getActiveObject(); if (!obj) return;
+      _setAngle((obj.angle || 0) - 15);
+    });
+    if (ctxRotateCw) ctxRotateCw.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const obj = canvas.getActiveObject(); if (!obj) return;
+      _setAngle((obj.angle || 0) + 15);
+    });
+    if (ctxRotateInput) {
+      ctxRotateInput.addEventListener('click',  function (e) { e.stopPropagation(); });
+      ctxRotateInput.addEventListener('change', function () { _setAngle(parseFloat(this.value) || 0); });
+    }
+
+    // ── Effects flyout panel ────────────────────────────────────────────────
+    const fxToggle = document.getElementById('ctx-effects-toggle');
+    const fxPanel  = document.getElementById('effects-panel');
+    const fxClose  = document.getElementById('effects-panel-close');
+
+    function _openEffects() {
+      if (!fxPanel) return;
+      // Close other left flyouts to avoid overlap
+      ['text-panel', 'uploads-panel', 'images-panel'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+      fxPanel.hidden = false;
+      const stage = document.getElementById('canvas-stage');
+      if (stage) stage.classList.add('fx-open');
+      if (fxToggle) fxToggle.classList.add('ctx-active');
+      _syncEffectsPanel(canvas.getActiveObject());
+    }
+    function _closeEffects() {
+      if (!fxPanel) return;
+      fxPanel.hidden = true;
+      const stage = document.getElementById('canvas-stage');
+      if (stage) stage.classList.remove('fx-open');
+      if (fxToggle) fxToggle.classList.remove('ctx-active');
+    }
+    if (fxToggle) fxToggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (fxPanel && fxPanel.hidden) _openEffects(); else _closeEffects();
+    });
+    if (fxClose) fxClose.addEventListener('click', function (e) { e.stopPropagation(); _closeEffects(); });
+
+    // Section collapse/expand — toggle via section header click (works on
+    // chevron and title via event bubbling)
+    document.querySelectorAll('#effects-panel .fx-section .fx-section-header').forEach(function (h) {
+      h.addEventListener('click', function (e) {
+        e.stopPropagation();
+        h.parentElement.classList.toggle('is-collapsed');
+      });
+    });
+
+    // Clicks anywhere inside the Effects panel should NOT close toolbar popovers
+    if (fxPanel) {
+      fxPanel.addEventListener('click', function (e) { e.stopPropagation(); });
+    }
+
+    // Sync uses the module-level syncEffectsPanel (so it can be called from
+    // showContextBar when selection changes while the panel is open)
+    function _syncEffectsPanel(obj) { syncEffectsPanel(obj); }
+
+    // Opacity
+    function _bindRangeInput(rangeId, inputId, fn) {
+      const r = document.getElementById(rangeId);
+      const i = document.getElementById(inputId);
+      const apply = function (v) { fn(v); if (r) r.value = v; if (i) i.value = v; };
+      if (r) r.addEventListener('input', function () { apply(this.value); });
+      if (i) i.addEventListener('change', function () { apply(this.value); });
+    }
+    _bindRangeInput('fx-opacity', 'fx-opacity-input', function (v) {
+      applyProp('opacity', Math.max(0, Math.min(1, parseFloat(v) / 100)));
+    });
+    _bindRangeInput('fx-line-spacing', 'fx-line-spacing-input', function (v) {
+      applyProp('lineHeight', parseFloat(v) || 1);
+    });
+    _bindRangeInput('fx-letter-spacing', 'fx-letter-spacing-input', function (v) {
+      applyProp('charSpacing', parseFloat(v) || 0);
+    });
+    _bindRangeInput('fx-stroke-width', 'fx-stroke-width-input', function (v) {
+      applyProp('strokeWidth', parseFloat(v) || 0);
+    });
+
+    // Shadow toggle
+    const fxShadow = document.getElementById('fx-shadow');
+    if (fxShadow) {
+      fxShadow.addEventListener('change', function () {
+        const obj = canvas.getActiveObject(); if (!obj) return;
+        if (this.checked) {
+          obj.set('shadow', new fabric.Shadow({ color: 'rgba(0,0,0,0.4)', blur: 6, offsetX: 2, offsetY: 2 }));
+        } else {
+          obj.set('shadow', null);
+        }
+        canvas.requestRenderAll(); pushHistory();
+        const lbl = document.getElementById('fx-shadow-state');
+        if (lbl) lbl.textContent = 'Text Shadow: ' + (this.checked ? 'on' : 'off');
+        updateCss3dPreview(obj);
+      });
+    }
+
+    // Stroke toggle + color
+    const fxStrokeChk   = document.getElementById('fx-stroke');
+    const fxStrokeColor = document.getElementById('fx-stroke-color');
+    if (fxStrokeChk) {
+      fxStrokeChk.addEventListener('change', function () {
+        const obj = canvas.getActiveObject(); if (!obj) return;
+        const ctl = document.querySelector('#effects-panel .fx-stroke-controls');
+        if (this.checked) {
+          obj.set({ stroke: fxStrokeColor ? fxStrokeColor.value : '#000000', strokeWidth: 1 });
+        } else {
+          obj.set({ stroke: null, strokeWidth: 0 });
+        }
+        if (ctl) ctl.hidden = !this.checked;
+        canvas.requestRenderAll(); pushHistory();
+        const lbl = document.getElementById('fx-stroke-state');
+        if (lbl) lbl.textContent = 'Text Stroke: ' + (this.checked ? 'on' : 'off');
+        const w = document.getElementById('fx-stroke-width');
+        const wi = document.getElementById('fx-stroke-width-input');
+        if (w)  w.value  = obj.strokeWidth || 0;
+        if (wi) wi.value = obj.strokeWidth || 0;
+        updateCss3dPreview(obj);
+      });
+    }
+    if (fxStrokeColor) fxStrokeColor.addEventListener('input', function () { applyProp('stroke', this.value); });
+
+    // ── Tiling engine ───────────────────────────────────────────────────────
+    function _isTextObj(o) {
+      return o && (o.type === 'IText' || o.type === 'i-text' || o.type === 'Textbox' || typeof o.text === 'string');
+    }
+    function _clearTiles(obj) {
+      if (!obj || !obj._tileClones) return;
+      obj._tileClones.forEach(function (c) { canvas.remove(c); });
+      delete obj._tileClones;
+    }
+    function _applyTiling(pattern) {
+      const obj = canvas.getActiveObject();
+      if (!_isTextObj(obj) || obj._isTileClone) return;
+
+      _clearTiles(obj);
+
+      if (pattern === 'none') {
+        obj.visible = true;
+        canvas.requestRenderAll();
+        pushHistory();
+        return;
+      }
+
+      const ab = _getArtboardRect();
+      const cols = (pattern === 'halfbrick') ? 3 : 2;
+      const rows = (pattern === 'halfdrop')  ? 3 : 2;
+      const cellW = ab.w / cols;
+      const cellH = ab.h / rows;
+
+      // Hide the original; tiles take its place
+      obj.visible = false;
+
+      const baseProps = ['text','fontFamily','fontSize','fontWeight','fontStyle',
+        'fill','stroke','strokeWidth','underline','linethrough','overline',
+        'charSpacing','lineHeight','textAlign','shadow'];
+      const propsObj = {};
+      baseProps.forEach(function (k) { propsObj[k] = obj[k]; });
+
+      const clones = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const offsetX = (pattern === 'halfbrick' && r % 2 === 1) ? cellW / 2 : 0;
+          const offsetY = (pattern === 'halfdrop'  && c % 2 === 1) ? cellH / 2 : 0;
+          const flip    = (pattern === 'mirror' && c % 2 === 1);
+
+          const clone = new fabric.IText(propsObj.text, Object.assign({}, propsObj, {
+            originX: 'center',
+            originY: 'center',
+            selectable: false,
+            evented: false,
+            flipX: flip,
+            scaleX: 0.45 * (obj.scaleX || 1),
+            scaleY: 0.45 * (obj.scaleY || 1)
+          }));
+          clone._isTileClone = true;
+          clone.set({
+            left: ab.left + (c + 0.5) * cellW + offsetX,
+            top:  ab.top  + (r + 0.5) * cellH + offsetY
+          });
+          clone.setCoords();
+          canvas.add(clone);
+          clones.push(clone);
+        }
+      }
+      obj._tileClones = clones;
+      // Keep the original in the DOM but hidden — it's still the "active" text
+      // so subsequent edits on the popover apply to it
+      canvas.bringToFront(obj);
+      canvas.requestRenderAll();
+      pushHistory();
+    }
+
+    document.querySelectorAll('#effects-panel .fx-tile').forEach(function (t) {
+      t.addEventListener('click', function (e) {
+        e.stopPropagation();
+        document.querySelectorAll('#effects-panel .fx-tile').forEach(function (x) { x.classList.remove('is-active'); });
+        t.classList.add('is-active');
+        _applyTiling(t.getAttribute('data-tiling'));
+      });
+    });
+
+    // ── Curved text engine (text-on-path) ───────────────────────────────────
+    function _applyCurve(angleDeg) {
+      const obj = canvas.getActiveObject();
+      if (!_isTextObj(obj)) return;
+
+      if (!angleDeg || angleDeg === 0) {
+        obj.set('path', null);
+        obj.setCoords();
+        canvas.requestRenderAll();
+        pushHistory();
+        updateCss3dPreview(obj);
+        return;
+      }
+
+      const a = Math.max(-180, Math.min(180, angleDeg));
+      const sign = a > 0 ? 1 : -1;
+      const rad  = Math.abs(a) * Math.PI / 180;
+      // Width of straight text (un-curved) — use the original textWidth or render bbox
+      const baseW = (obj.path ? (obj._origPathW || 200) : (obj.width * (obj.scaleX || 1))) || 200;
+      if (!obj._origPathW) obj._origPathW = baseW;
+
+      // Build a quadratic-bezier arc that bulges by sagitta
+      const radius   = baseW / (2 * Math.sin(rad / 2));
+      const sagitta  = radius - radius * Math.cos(rad / 2);
+      const path = new fabric.Path(
+        'M 0 0 Q ' + (baseW / 2) + ' ' + (sign * sagitta * 2) + ' ' + baseW + ' 0',
+        { fill: '', stroke: '', visible: false, objectCaching: false }
+      );
+      obj.set('path', path);
+      obj.setCoords();
+      canvas.requestRenderAll();
+      pushHistory();
+      updateCss3dPreview(obj);
+    }
+    _bindRangeInput('fx-curve', 'fx-curve-input', function (v) {
+      _applyCurve(parseFloat(v) || 0);
+    });
+
+    // ── Vertical orientation engine ─────────────────────────────────────────
+    function _setOrientation(orient) {
+      const obj = canvas.getActiveObject();
+      if (!_isTextObj(obj)) return;
+
+      if (orient === 'vertical') {
+        if (obj._origText == null) obj._origText = obj.text;
+        const chars = String(obj._origText).split('');
+        obj.set('text', chars.join('\n'));
+        obj.set('textAlign', 'center');
+      } else {
+        if (obj._origText != null) {
+          obj.set('text', obj._origText);
+          delete obj._origText;
+        }
+      }
+      obj.setCoords();
+      canvas.requestRenderAll();
+      pushHistory();
+      updateCss3dPreview(obj);
+    }
+
+    document.querySelectorAll('#effects-panel .fx-orient').forEach(function (t) {
+      t.addEventListener('click', function (e) {
+        e.stopPropagation();
+        document.querySelectorAll('#effects-panel .fx-orient').forEach(function (x) { x.classList.remove('is-active'); });
+        t.classList.add('is-active');
+        _setOrientation(t.getAttribute('data-orient'));
+      });
+    });
+
+    // Click anywhere outside the bar → close popovers
+    document.addEventListener('click', function (e) {
+      const bar = document.getElementById('context-bar');
+      if (bar && !bar.contains(e.target)) _closePopovers();
+    });
 
     const ctxBold   = document.getElementById('ctx-bold');
     const ctxItalic = document.getElementById('ctx-italic');
@@ -2254,7 +3248,7 @@
       });
     }
 
-    // Thumbnail clicks inside preview modal
+    // Thumbnail clicks inside preview modal — real-photo pipeline only
     document.querySelectorAll('.preview-modal-thumb').forEach(function (thumb) {
       thumb.addEventListener('click', function () {
         document.querySelectorAll('.preview-modal-thumb')
@@ -2262,26 +3256,32 @@
         thumb.classList.add('active');
         if (pmLabel) pmLabel.textContent = thumb.dataset.label || '';
 
+        var modal = document.getElementById('preview-modal');
+        var dUrl  = _captureDesignLayer(1);
+        if (!modal || !dUrl) return;
+        var dImg = new Image();
+        dImg.onload = function () { _renderModalMainCanvas(modal, dImg); };
+        dImg.src = dUrl;
+        return; // skip the legacy Three.js fallback below
+
+        // (legacy code below intentionally unreachable — kept for diff context)
         var isDonut = thumb.dataset.isDonut === 'true';
         var deg     = parseFloat(thumb.dataset.angle || '0');
 
         if (isDonut) {
-          // Donut: canvas 2D fallback
           _showThreeView(false);
-          var dUrl = _captureDesignLayer(1);
-          if (!dUrl || !pmCanvas) return;
+          var dUrl0 = _captureDesignLayer(1);
+          if (!dUrl0 || !pmCanvas) return;
           var pa2  = getPrintAreaPx();
-          var dImg = new Image();
-          dImg.onload = function () {
-            renderDonutView(pmCanvas.getContext('2d'), pmCanvas.width, pmCanvas.height, dImg, pa2);
+          var dImg0 = new Image();
+          dImg0.onload = function () {
+            renderDonutView(pmCanvas.getContext('2d'), pmCanvas.width, pmCanvas.height, dImg0, pa2);
           };
-          dImg.src = dUrl;
+          dImg0.src = dUrl0;
         } else if (_threeInited) {
-          // Three.js: just rotate the existing scene — no re-capture needed
           _showThreeView(true);
           _renderThreeScene(deg);
         } else {
-          // Three.js not yet loaded: capture + init + render
           _showThreeView(true);
           var dUrl2 = _captureDesignLayer(1);
           if (!dUrl2) return;
@@ -2369,6 +3369,564 @@
         pushHistory();
       }
     });
+
+    // ── Background panel ────────────────────────────────────────────────────
+    bindBackgroundPanel();
+  }
+
+  // ── Review page (in-page tab) ──────────────────────────────────────────
+  function _formatShipDate(addBizDays) {
+    var d = new Date();
+    var added = 0;
+    while (added < addBizDays) {
+      d.setDate(d.getDate() + 1);
+      var dow = d.getDay();
+      if (dow !== 0 && dow !== 6) added++;
+    }
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  function renderReviewPage() {
+    var page = document.getElementById('review-page');
+    if (!page) return;
+
+    // Populate ship dates (5 / 10 business days)
+    var fast = document.getElementById('ship-date-fast');
+    var std  = document.getElementById('ship-date-std');
+    if (fast) fast.textContent = _formatShipDate(5);
+    if (std)  std.textContent  = _formatShipDate(10);
+
+    // Capture current design layer
+    var designUrl = _captureDesignLayer(1);
+    if (!designUrl) return;
+
+    var dImg = new Image();
+    dImg.onload = function () {
+      // Render every thumbnail with its angle photo + design composited
+      page.querySelectorAll('.review-thumb').forEach(function (thumb) {
+        var cv  = thumb.querySelector('canvas');
+        if (!cv) return;
+        var ctx = cv.getContext('2d');
+        var key = thumb.dataset.angleKey || 'center';
+        var ang = _angleByKey(key);
+        if (!ang) return;
+        _loadPreviewPhoto(ang.img, function (photoEl) {
+          renderRealAngleView(ctx, cv.width, cv.height, dImg, photoEl, ang.paPct, ang.angle);
+        });
+      });
+
+      // Render main preview for the active angle
+      var active = page.querySelector('.review-thumb.active') || page.querySelector('.review-thumb');
+      _renderReviewMain(active ? active.dataset.angleKey : 'left', dImg);
+    };
+    dImg.src = designUrl;
+  }
+
+  function _renderReviewMain(angleKey, dImg) {
+    var canvasEl = document.getElementById('review-main-canvas');
+    var labelEl  = document.getElementById('review-main-label');
+    if (!canvasEl) return;
+    var ang = _angleByKey(angleKey || 'left');
+    if (!ang) return;
+    if (labelEl) labelEl.textContent = ang.label;
+    var ctx = canvasEl.getContext('2d');
+
+    function paint(designImg) {
+      _loadPreviewPhoto(ang.img, function (photoEl) {
+        renderRealAngleView(ctx, canvasEl.width, canvasEl.height, designImg, photoEl, ang.paPct, ang.angle);
+      });
+    }
+    if (dImg) { paint(dImg); return; }
+    var url = _captureDesignLayer(1);
+    if (!url) { paint(null); return; }
+    var img = new Image();
+    img.onload = function () { paint(img); };
+    img.src = url;
+  }
+
+  function bindReviewPage() {
+    var page = document.getElementById('review-page');
+    if (!page) return;
+
+    // Thumbnail clicks → re-render main
+    page.querySelectorAll('.review-thumb').forEach(function (thumb) {
+      thumb.addEventListener('click', function () {
+        page.querySelectorAll('.review-thumb').forEach(function (t) { t.classList.remove('active'); });
+        thumb.classList.add('active');
+        _renderReviewMain(thumb.dataset.angleKey);
+      });
+    });
+
+    // Sell / Buy toggle (visual only V1)
+    page.querySelectorAll('.review-sb-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        page.querySelectorAll('.review-sb-btn').forEach(function (b) {
+          b.classList.remove('is-active');
+          b.setAttribute('aria-selected', 'false');
+        });
+        btn.classList.add('is-active');
+        btn.setAttribute('aria-selected', 'true');
+      });
+    });
+
+    // Quantity stepper + live subtotal
+    var qtyInput = document.getElementById('review-qty');
+    var qtyMinus = document.getElementById('review-qty-minus');
+    var qtyPlus  = document.getElementById('review-qty-plus');
+    var rail     = page.querySelector('.review-rail');
+    var priceEl  = document.getElementById('review-price');
+    var unit     = rail ? parseFloat(rail.dataset.unitPrice) || 15.05 : 15.05;
+
+    function updateSubtotal() {
+      var q = Math.max(1, Math.min(99, parseInt(qtyInput.value, 10) || 1));
+      qtyInput.value = q;
+      if (priceEl) priceEl.textContent = '$' + (unit * q).toFixed(2);
+    }
+    if (qtyInput) qtyInput.addEventListener('change', updateSubtotal);
+    if (qtyInput) qtyInput.addEventListener('input',  updateSubtotal);
+    if (qtyMinus) qtyMinus.addEventListener('click', function () {
+      qtyInput.value = Math.max(1, (parseInt(qtyInput.value, 10) || 1) - 1);
+      updateSubtotal();
+    });
+    if (qtyPlus) qtyPlus.addEventListener('click', function () {
+      qtyInput.value = Math.min(99, (parseInt(qtyInput.value, 10) || 1) + 1);
+      updateSubtotal();
+    });
+
+    // Add to Cart — serialise design + delegate to existing flow
+    var atc = document.getElementById('review-add-to-cart');
+    if (atc) atc.addEventListener('click', function () {
+      var qty = Math.max(1, Math.min(99, parseInt(qtyInput.value, 10) || 1));
+      atc.classList.add('is-loading');
+      atc.querySelector('span').textContent = 'Adding…';
+      try {
+        var design = serializeDesign(true);
+        saveToSession(design);
+        // Reuse existing review URL flow if present, otherwise emit event
+        if (cfg && cfg.reviewUrl) {
+          window.location.href = cfg.reviewUrl + '&qty=' + qty;
+        } else {
+          showToast('Added to cart');
+        }
+      } catch (e) {
+        atc.classList.remove('is-loading');
+        atc.querySelector('span').textContent = 'Add to Cart';
+        showToast('Couldn’t add — try again');
+      }
+    });
+
+    // Re-render main when window resizes (handles responsive layout shift)
+    window.addEventListener('resize', function () {
+      if (page.hidden) return;
+      var active = page.querySelector('.review-thumb.active');
+      if (active) _renderReviewMain(active.dataset.angleKey);
+    });
+  }
+
+  // Preset background library — V1 uses CSS gradients/patterns inline. Real
+  // photo presets can be appended once asset files land in
+  // public/assets/images/backgrounds/.
+  var _BG_PRESETS = [
+    { id: 'p01', kind: 'print', name: 'Black geometric',  css: 'repeating-linear-gradient(45deg, #1a1a1a 0 8px, #2a2a2a 8px 16px)', tags: ['pattern','dark'] },
+    { id: 'p02', kind: 'print', name: 'White marble',     css: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 40%, #d1d5db 60%, #f3f4f6 100%)', tags: ['marble','light'] },
+    { id: 'p03', kind: 'web',   name: 'Rainbow bokeh',    css: 'radial-gradient(circle at 30% 20%, #fbcfe8 0, transparent 18%), radial-gradient(circle at 70% 60%, #a5b4fc 0, transparent 22%), radial-gradient(circle at 50% 80%, #fde68a 0, transparent 20%), linear-gradient(135deg, #fbcfe8, #a5b4fc)', tags: ['bokeh'] },
+    { id: 'p04', kind: 'print', name: 'Grey marble',      css: 'linear-gradient(135deg, #d1d5db 0%, #9ca3af 50%, #d1d5db 100%)', tags: ['marble'] },
+    { id: 'p05', kind: 'web',   name: 'Sunset',           css: 'linear-gradient(180deg, #fbbf24, #ec4899, #6d28d9)', tags: ['gradient','sunset'] },
+    { id: 'p06', kind: 'print', name: 'Linen',            css: 'repeating-linear-gradient(0deg, #f5f5dc 0 2px, #ede8c8 2px 4px)', tags: ['texture','light'] },
+    { id: 'p07', kind: 'web',   name: 'Ocean',            css: 'linear-gradient(180deg, #0c4a6e, #0ea5e9, #7dd3fc)', tags: ['gradient','blue'] },
+    { id: 'p08', kind: 'print', name: 'Kraft paper',      css: 'linear-gradient(135deg, #d4a574, #b88a5d)', tags: ['texture'] },
+    { id: 'p09', kind: 'web',   name: 'Mint dots',        css: 'radial-gradient(#a7f3d0 1.5px, transparent 2px) 0 0/14px 14px, #ecfdf5', tags: ['pattern','green'] },
+    { id: 'p10', kind: 'print', name: 'Charcoal',         css: 'linear-gradient(180deg, #1c1917, #292524)', tags: ['solid','dark'] },
+    { id: 'p11', kind: 'web',   name: 'Coral wave',       css: 'linear-gradient(135deg, #fbcfe8, #f97316, #ec4899)', tags: ['gradient','warm'] },
+    { id: 'p12', kind: 'print', name: 'Stripes',          css: 'repeating-linear-gradient(90deg, #ffffff 0 12px, #f3f4f6 12px 24px)', tags: ['pattern','light'] },
+    { id: 'p13', kind: 'web',   name: 'Galaxy',           css: 'radial-gradient(circle at 60% 30%, #6d28d9 0, transparent 40%), radial-gradient(circle at 30% 70%, #1e3a8a 0, transparent 50%), #0f172a', tags: ['space','dark'] },
+    { id: 'p14', kind: 'print', name: 'Cream solid',      css: '#fef3c7', tags: ['solid','light'] },
+    { id: 'p15', kind: 'web',   name: 'Pastel grid',      css: 'linear-gradient(#7dd3fc 1px, transparent 1px) 0 0/20px 20px, linear-gradient(90deg, #7dd3fc 1px, transparent 1px) 0 0/20px 20px, #ecfdf5', tags: ['pattern'] },
+    { id: 'p16', kind: 'print', name: 'Forest',           css: 'linear-gradient(180deg, #064e3b, #166534)', tags: ['gradient','green'] },
+  ];
+
+  // ── Design-area background fill ─────────────────────────────────────────
+  // The bg fills ONLY the print-area rectangle (Zazzle behaviour) — not the
+  // whole canvas. Mug photo and all guides remain visible outside the rect.
+  // We persist a single fabric object (`_designBgFill`) at z-index 0
+  // (deepest among objects, but ABOVE the canvas backgroundImage = mug photo).
+  var _designBgFill  = null;
+  var _designBgState = null; // { type:'transparent'|'color'|'image'|'preset', value/css }
+
+  function setMugBackground(state) {
+    _designBgState = state || { type: 'transparent' };
+    _updateDesignBgFill();
+    _refreshBgPreview();
+  }
+
+  function _updateDesignBgFill() {
+    if (!canvas) return;
+
+    // Remove prior fill
+    if (_designBgFill) {
+      canvas.remove(_designBgFill);
+      _designBgFill = null;
+    }
+
+    var state = _designBgState;
+    if (!state || state.type === 'transparent') {
+      canvas.requestRenderAll();
+      return;
+    }
+
+    var pa = getPrintAreaPx();
+    var rx = pa.rx || 0;
+
+    function _placeAndPushBack(obj) {
+      _designBgFill = obj;
+      canvas.add(obj);
+      // Send to back, then re-send guides to back so guides render OVER the fill
+      canvas.sendToBack(obj);
+      _printAreaGuides.forEach(function (g) { canvas.bringForward(g); });
+      canvas.requestRenderAll();
+    }
+
+    if (state.type === 'color') {
+      var rect = new fabric.Rect({
+        left: pa.left, top: pa.top,
+        width: pa.width, height: pa.height,
+        rx: rx, ry: rx,
+        fill: state.value || '#ffffff',
+        selectable: false, evented: false,
+        excludeFromExport: false,
+      });
+      _placeAndPushBack(rect);
+      return;
+    }
+
+    if (state.type === 'image' && state.value) {
+      fabric.Image.fromURL(state.value, function (img) {
+        if (!img) return;
+        var sx = pa.width  / img.width;
+        var sy = pa.height / img.height;
+        var s  = Math.max(sx, sy); // cover-fit
+        img.set({
+          left: pa.left + pa.width / 2,
+          top:  pa.top  + pa.height / 2,
+          originX: 'center', originY: 'center',
+          scaleX: s, scaleY: s,
+          selectable: false, evented: false,
+          excludeFromExport: false,
+          clipPath: new fabric.Rect({
+            width:  pa.width  / s,
+            height: pa.height / s,
+            rx: rx / s, ry: rx / s,
+            originX: 'center', originY: 'center',
+          }),
+        });
+        _placeAndPushBack(img);
+      }, { crossOrigin: 'anonymous' });
+      return;
+    }
+
+    if (state.type === 'preset' && state.css) {
+      _renderCssToImage(state.css, pa.width, pa.height, function (htmlImg) {
+        if (!htmlImg) return;
+        var img = new fabric.Image(htmlImg, {
+          left: pa.left, top: pa.top,
+          originX: 'left', originY: 'top',
+          selectable: false, evented: false,
+          excludeFromExport: false,
+        });
+        // Apply rounded-corner clip
+        if (rx > 0) {
+          img.set({
+            clipPath: new fabric.Rect({
+              width:  pa.width,
+              height: pa.height,
+              rx: rx, ry: rx,
+              originX: 'center', originY: 'center',
+            }),
+          });
+        }
+        _placeAndPushBack(img);
+      });
+    }
+  }
+
+  // CSS string → HTMLImage via SVG foreignObject. Used to render preset
+  // gradient/pattern CSS into a real image we can hand to fabric.
+  function _renderCssToImage(css, w, h, cb) {
+    try {
+      var safeCss = String(css).replace(/"/g, "'");
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '">' +
+        '<foreignObject width="100%" height="100%">' +
+        '<div xmlns="http://www.w3.org/1999/xhtml" style="width:' + w + 'px;height:' + h + 'px;background:' + safeCss + '"></div>' +
+        '</foreignObject></svg>';
+      var blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      var url  = URL.createObjectURL(blob);
+      var img  = new Image();
+      img.onload  = function () { URL.revokeObjectURL(url); cb(img); };
+      img.onerror = function () { URL.revokeObjectURL(url); cb(null); };
+      img.src = url;
+    } catch (e) { cb(null); }
+  }
+
+  // Refresh the small "Background color" preview tile in the panel
+  function _refreshBgPreview() {
+    var prev = document.getElementById('bg-color-preview');
+    if (!prev) return;
+    var s = _designBgState || { type: 'transparent' };
+    prev.classList.remove('is-transparent', 'is-image');
+    if (s.type === 'transparent' || !s.type) {
+      prev.classList.add('is-transparent');
+      prev.style.background = '';
+    } else if (s.type === 'color') {
+      prev.style.background = s.value || '#ffffff';
+    } else if (s.type === 'image' && s.value) {
+      prev.classList.add('is-image');
+      prev.style.background = 'url(' + s.value + ') center/cover';
+    } else if (s.type === 'preset' && s.css) {
+      prev.style.background = s.css;
+    }
+  }
+
+  // _ensureCanvasChecker stays for the Settings → "Show transparency" toggle
+  function _ensureCanvasChecker(on) {
+    var wrapper = canvas && canvas.wrapperEl; if (!wrapper) return;
+    var el = wrapper.querySelector('.canvas-checker');
+    if (on) {
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'canvas-checker';
+        el.style.left = '0'; el.style.top = '0';
+        el.style.width  = canvas.getWidth()  + 'px';
+        el.style.height = canvas.getHeight() + 'px';
+        wrapper.insertBefore(el, wrapper.firstChild);
+      }
+    } else if (el) { el.remove(); }
+  }
+  function _clearPresetLayer() { /* no-op (legacy callers retained) */ }
+
+  function renderBgPresets() {
+    var grid = document.getElementById('bg-preset-grid');
+    if (!grid) return;
+    var activeKind = (document.querySelector('.bg-tab.is-active') || {}).getAttribute && document.querySelector('.bg-tab.is-active').getAttribute('data-kind') || 'print';
+    var query = (document.getElementById('bg-search-input') || {}).value || '';
+    query = String(query).trim().toLowerCase();
+
+    grid.innerHTML = '';
+    _BG_PRESETS.forEach(function (p) {
+      if (p.kind !== activeKind) return;
+      if (query) {
+        var hay = (p.name + ' ' + (p.tags || []).join(' ')).toLowerCase();
+        if (hay.indexOf(query) === -1) return;
+      }
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'bg-preset';
+      btn.setAttribute('data-id', p.id);
+      btn.style.background = p.css;
+      btn.title = p.name;
+      var lbl = document.createElement('span');
+      lbl.className = 'bg-preset-name';
+      lbl.textContent = p.name;
+      btn.appendChild(lbl);
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('#bg-preset-grid .bg-preset').forEach(function (x) { x.classList.remove('is-active'); });
+        btn.classList.add('is-active');
+        _setActiveSwatch(null);
+        setMugBackground({ type: 'preset', css: p.css });
+        _persistBgState({ type: 'preset', presetId: p.id });
+      });
+      grid.appendChild(btn);
+    });
+  }
+
+  function _setActiveSwatch(color) {
+    document.querySelectorAll('#background-panel .bg-swatch').forEach(function (s) {
+      s.classList.toggle('is-active', s.getAttribute('data-color') === color);
+    });
+  }
+  function _persistBgState(s) {
+    try { localStorage.setItem('mugBgState', JSON.stringify(s)); } catch (e) {}
+  }
+  function _restoreBgState() {
+    try {
+      var s = JSON.parse(localStorage.getItem('mugBgState') || 'null');
+      if (!s) return;
+      if (s.type === 'preset' && s.presetId) {
+        var p = _BG_PRESETS.find(function (x) { return x.id === s.presetId; });
+        if (p) setMugBackground({ type: 'preset', css: p.css });
+        return;
+      }
+      if (s.type === 'image' && s.value) { setMugBackground({ type: 'image', value: s.value }); return; }
+      if (s.type === 'color' && s.value) {
+        setMugBackground({ type: 'color', value: s.value });
+        var input = document.getElementById('bg-hex-input'); if (input) input.value = s.value;
+        _setActiveSwatch(s.value);
+      }
+    } catch (e) {}
+  }
+
+  function bindBackgroundPanel() {
+    var panel = document.getElementById('background-panel');
+    if (!panel) return;
+
+    // Section collapse/expand
+    panel.querySelectorAll('.bg-section .fx-section-header').forEach(function (h) {
+      h.addEventListener('click', function () { h.parentElement.classList.toggle('is-collapsed'); });
+    });
+
+    // Search — live-filter preset grid
+    var searchInput = document.getElementById('bg-search-input');
+    if (searchInput) searchInput.addEventListener('input', renderBgPresets);
+
+    // Tabs
+    panel.querySelectorAll('.bg-tab').forEach(function (t) {
+      t.addEventListener('click', function () {
+        panel.querySelectorAll('.bg-tab').forEach(function (x) {
+          x.classList.remove('is-active');
+          x.setAttribute('aria-selected', 'false');
+        });
+        t.classList.add('is-active');
+        t.setAttribute('aria-selected', 'true');
+        renderBgPresets();
+      });
+    });
+
+    // Upload
+    var uploadBtn   = document.getElementById('bg-upload-btn');
+    var uploadInput = document.getElementById('bg-upload-input');
+    var uploadThumb = document.getElementById('bg-uploaded-thumb');
+    if (uploadBtn && uploadInput) {
+      uploadBtn.addEventListener('click', function () { uploadInput.click(); });
+      uploadInput.addEventListener('change', function (e) {
+        var file = e.target.files && e.target.files[0]; if (!file) return;
+        if (file.size > 10 * 1024 * 1024) { showToast('Image too large (max 10 MB).'); return; }
+        if (!['image/jpeg','image/png'].includes(file.type)) { showToast('Only JPG and PNG accepted.'); return; }
+        var fr = new FileReader();
+        fr.onload = function (ev) {
+          var url = ev.target.result;
+          if (uploadThumb) {
+            uploadThumb.classList.add('has-image');
+            uploadThumb.style.backgroundImage = 'url(' + url + ')';
+            uploadThumb.style.backgroundSize  = 'cover';
+            uploadThumb.style.backgroundPosition = 'center';
+          }
+          setMugBackground({ type: 'image', value: url });
+          _setActiveSwatch(null);
+          document.querySelectorAll('#bg-preset-grid .bg-preset').forEach(function (x) { x.classList.remove('is-active'); });
+          _persistBgState({ type: 'image', value: url });
+        };
+        fr.readAsDataURL(file);
+      });
+    }
+
+    // Custom hex
+    var hexInput = document.getElementById('bg-hex-input');
+    if (hexInput) {
+      var applyHex = function () {
+        var v = (hexInput.value || '').trim();
+        if (!/^#([0-9a-f]{6}|[0-9a-f]{8})$/i.test(v)) return;
+        var color = v;
+        if (v.length === 9) {
+          var hh = v.substring(1);
+          var r = parseInt(hh.substring(0,2),16);
+          var g = parseInt(hh.substring(2,4),16);
+          var b = parseInt(hh.substring(4,6),16);
+          var a = parseInt(hh.substring(6,8),16) / 255;
+          color = 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+          if (a < 0.02) {
+            setMugBackground({ type: 'transparent' });
+            _setActiveSwatch('transparent');
+            _persistBgState({ type: 'transparent' });
+            _clearPresetLayer();
+            return;
+          }
+        }
+        setMugBackground({ type: 'color', value: color });
+        _setActiveSwatch(v.toLowerCase());
+        document.querySelectorAll('#bg-preset-grid .bg-preset').forEach(function (x) { x.classList.remove('is-active'); });
+        _clearPresetLayer();
+        _persistBgState({ type: 'color', value: color });
+      };
+      hexInput.addEventListener('change', applyHex);
+      hexInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { applyHex(); this.blur(); } });
+    }
+
+    // Eyedropper (Chromium 95+)
+    var eyeBtn = document.getElementById('bg-eyedropper-btn');
+    if (eyeBtn) eyeBtn.addEventListener('click', function () {
+      if (typeof EyeDropper === 'undefined') { showToast('Eyedropper not supported in this browser'); return; }
+      try {
+        var ed = new EyeDropper();
+        ed.open().then(function (res) {
+          var sRGBHex = res.sRGBHex;
+          var hi = document.getElementById('bg-hex-input');
+          if (hi) { hi.value = sRGBHex; hi.dispatchEvent(new Event('change')); }
+        }).catch(function () {});
+      } catch (e) {}
+    });
+
+    // Swatches
+    panel.querySelectorAll('.bg-swatch').forEach(function (s) {
+      s.addEventListener('click', function () {
+        var color = s.getAttribute('data-color');
+        _setActiveSwatch(color);
+        document.querySelectorAll('#bg-preset-grid .bg-preset').forEach(function (x) { x.classList.remove('is-active'); });
+        _clearPresetLayer();
+        if (color === 'transparent') {
+          setMugBackground({ type: 'transparent' });
+          _persistBgState({ type: 'transparent' });
+        } else {
+          setMugBackground({ type: 'color', value: color });
+          _persistBgState({ type: 'color', value: color });
+          var hi = document.getElementById('bg-hex-input');
+          if (hi) hi.value = color;
+        }
+      });
+    });
+
+    // + Expand toggles "Additional colors" section
+    var expandBtn = document.getElementById('bg-expand-btn');
+    if (expandBtn) {
+      expandBtn.addEventListener('click', function () {
+        var sec = panel.querySelector('.bg-section[data-section="additional"]');
+        if (sec) sec.classList.remove('is-collapsed');
+        sec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }
+
+    // Remove background — clears every kind of bg (image / preset / colour)
+    // and resets UI state to "Transparent".
+    var removeBtn = document.getElementById('bg-remove-btn');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function () {
+        // Clear canvas-side
+        _clearPresetLayer();
+        setMugBackground({ type: 'transparent' });
+
+        // Reset UI: upload thumb, preset highlight, hex input, swatch ring
+        var thumb = document.getElementById('bg-uploaded-thumb');
+        if (thumb) {
+          thumb.classList.remove('has-image');
+          thumb.style.removeProperty('background-image');
+          thumb.style.removeProperty('background-size');
+          thumb.style.removeProperty('background-position');
+        }
+        var fileInput = document.getElementById('bg-upload-input');
+        if (fileInput) fileInput.value = '';
+
+        document.querySelectorAll('#bg-preset-grid .bg-preset').forEach(function (x) { x.classList.remove('is-active'); });
+        var hi = document.getElementById('bg-hex-input');
+        if (hi) hi.value = '#00FFFFFF';
+        _setActiveSwatch('transparent');
+
+        // Persist + toast
+        try { localStorage.removeItem('mugBgState'); } catch (e) {}
+        showToast('Background removed');
+      });
+    }
+
+    // Render initial preset grid + restore last bg state
+    renderBgPresets();
+    _restoreBgState();
   }
 
   // ── Bootstrap ─────────────────────────────────────────────────────────────
