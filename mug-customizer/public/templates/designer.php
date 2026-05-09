@@ -964,6 +964,30 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
 
 </div><!-- /#designer-wrap -->
 
+<!-- ── "Just added to your cart!" mini-modal (Zazzle parity) ───────────── -->
+<div id="just-added-backdrop" hidden></div>
+<div id="just-added-modal" role="dialog" aria-modal="true" aria-labelledby="just-added-title" hidden>
+  <button type="button" class="ja-close" id="just-added-close" aria-label="<?php esc_attr_e('Close', 'mug-customizer'); ?>">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+  </button>
+  <h2 id="just-added-title" class="ja-title"><?php esc_html_e('Just added to your cart!', 'mug-customizer'); ?></h2>
+
+  <div class="ja-row">
+    <div class="ja-thumb-wrap">
+      <canvas id="just-added-thumb" width="200" height="200"></canvas>
+    </div>
+    <div class="ja-info">
+      <div class="ja-name"><?php esc_html_e('Mug', 'mug-customizer'); ?></div>
+      <div class="ja-price" id="just-added-price">$0.00</div>
+      <div class="ja-qty"><?php esc_html_e('Qty', 'mug-customizer'); ?> <span id="just-added-qty">1</span></div>
+    </div>
+    <div class="ja-actions">
+      <a href="<?php echo esc_url(function_exists('wc_get_cart_url') ? wc_get_cart_url() : '#'); ?>" id="just-added-view-cart" class="ja-cta-cart"><?php esc_html_e('View Cart + Check Out', 'mug-customizer'); ?></a>
+      <button type="button" id="just-added-continue" class="ja-continue"><?php esc_html_e('Continue shopping', 'mug-customizer'); ?></button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Full Preview Modal (Zazzle-style: thumb strip + large view) ─────── -->
 <div id="preview-modal" role="dialog" aria-modal="true" aria-label="<?php esc_attr_e('Mug Preview', 'mug-customizer'); ?>">
   <div id="preview-modal-dialog">
@@ -1032,12 +1056,14 @@ $review_url   = home_url('/mug-review/?product_id=' . $product_id . '&variation_
 <!-- Hidden data for JS -->
 <script>
 window.mugDesignerConfig = {
-  productId:   <?php echo (int) $product_id; ?>,
-  variationId: <?php echo (int) $variation_id; ?>,
-  style:       <?php echo wp_json_encode($style); ?>,
-  size:        <?php echo wp_json_encode($size); ?>,
-  color:       <?php echo wp_json_encode($color); ?>,
-  reviewUrl:   <?php echo wp_json_encode($review_url); ?>,
+  productId:    <?php echo (int) $product_id; ?>,
+  variationId:  <?php echo (int) $variation_id; ?>,
+  style:        <?php echo wp_json_encode($style); ?>,
+  size:         <?php echo wp_json_encode($size); ?>,
+  color:        <?php echo wp_json_encode($color); ?>,
+  reviewUrl:    <?php echo wp_json_encode($review_url); ?>,
+  cartUrl:      <?php echo wp_json_encode(function_exists('wc_get_cart_url') ? wc_get_cart_url() : '/cart/'); ?>,
+  addToCartUrl: <?php echo wp_json_encode(function_exists('WC') ? WC_AJAX::get_endpoint('add_to_cart') : '/?wc-ajax=add_to_cart'); ?>,
 };
 </script>
 

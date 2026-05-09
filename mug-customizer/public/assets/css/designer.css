@@ -1303,6 +1303,102 @@ html.mug-designer-html, html.mug-review-html { margin-top: 0 !important; padding
 /* When effects panel is open, ensure canvas-stage left padding is sufficient */
 #canvas-stage.fx-open { padding-left: 520px; }
 
+/* ── "Just added to your cart!" slide-in modal (Zazzle parity) ────────── */
+#just-added-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 9998;
+  opacity: 0;
+  transition: opacity 240ms ease-out;
+}
+#just-added-backdrop.is-open { opacity: 1; }
+#just-added-backdrop[hidden] { display: none; }
+
+#just-added-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  background: #ffffff;
+  padding: 32px 56px 36px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.10), 0 2px 6px rgba(0, 0, 0, 0.06);
+  z-index: 9999;
+  transform: translateY(-100%);
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+#just-added-modal[hidden] { display: none; }
+#just-added-modal.is-open { transform: translateY(0); }
+
+#just-added-modal .ja-close {
+  position: absolute;
+  top: 22px; left: 22px;
+  width: 36px; height: 36px;
+  background: transparent; border: none;
+  color: #1a1a1a;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+}
+#just-added-modal .ja-close:hover { background: #f3f4f6; }
+
+#just-added-modal .ja-title {
+  margin: 0 0 22px 60px;
+  font-size: 24px; font-weight: 700; color: #1a1a1a;
+}
+
+#just-added-modal .ja-row {
+  display: flex; align-items: center; gap: 28px;
+  padding-left: 60px;
+  flex-wrap: wrap;
+}
+.ja-thumb-wrap {
+  width: 96px; height: 96px;
+  border-radius: 8px; overflow: hidden;
+  background: #f3f4f6;
+  flex-shrink: 0;
+}
+#just-added-thumb { width: 100%; height: 100%; display: block; }
+
+.ja-info {
+  display: flex; flex-direction: column; gap: 4px;
+  min-width: 140px;
+}
+.ja-info .ja-name { font-size: 16px; font-weight: 400; color: #1a1a1a; }
+.ja-info .ja-price { font-size: 18px; font-weight: 700; color: #1a1a1a; }
+.ja-info .ja-qty { font-size: 14px; color: #4b5563; }
+
+.ja-actions {
+  margin-left: auto;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+.ja-cta-cart {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #fbbf24; color: #1a1a1a;
+  border: none; border-radius: 6px;
+  padding: 14px 56px;
+  font-size: 16px; font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .12s;
+  min-width: 280px;
+}
+.ja-cta-cart:hover { background: #f59e0b; color: #1a1a1a; }
+.ja-continue {
+  background: transparent; border: none;
+  color: #1e40af;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+.ja-continue:hover { text-decoration: underline; }
+
+@media (max-width: 720px) {
+  #just-added-modal { padding: 22px 18px 28px; }
+  #just-added-modal .ja-title { margin: 0 0 16px 40px; font-size: 20px; }
+  #just-added-modal .ja-row { padding-left: 0; gap: 16px; }
+  .ja-actions { width: 100%; }
+  .ja-cta-cart { width: 100%; min-width: 0; }
+}
+
 /* ── Review page (Zazzle parity 3-column) ─────────────────────────────── */
 #review-page {
   flex: 1;

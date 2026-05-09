@@ -138,6 +138,26 @@ class Mug_Customizer_Rest_Api {
         $quantity     = max(1, (int) ($body['quantity'] ?? 1));
         $design       = $body['design'] ?? [];
 
+        // ── Bootstrap WC cart in REST context ─────────────────────────────────
+        // WC() singleton exists, but ->cart and ->session are not initialised on
+        // REST requests by default. wc_load_cart() handles all of session +
+        // cart + customer setup correctly.
+        if (! function_exists('WC') || ! function_exists('wc_get_product')) {
+            return new WP_REST_Response(['code' => 'wc_missing', 'message' => 'WooCommerce is not active.'], 500);
+        }
+        if (function_exists('wc_load_cart')) {
+            wc_load_cart();
+        }
+        if (is_null(WC()->cart)) {
+            // Last-ditch fallback for older WC versions
+            WC()->frontend_includes();
+            if (method_exists(WC(), 'initialize_session')) WC()->initialize_session();
+            if (method_exists(WC(), 'initialize_cart'))    WC()->initialize_cart();
+        }
+        if (is_null(WC()->cart)) {
+            return new WP_REST_Response(['code' => 'cart_unavailable', 'message' => 'Cart could not be initialised.'], 500);
+        }
+
         $storage = new Mug_Customizer_Design_Storage();
         $valid   = $storage->validate($design);
         if (is_wp_error($valid)) {
@@ -159,10 +179,48 @@ class Mug_Customizer_Rest_Api {
             '_mug_addons'  => wp_json_encode($design['addons'] ?? []),
         ];
 
-        $cart_item_key = WC()->cart->add_to_cart($product_id, $quantity, $variation_id, [], $cart_item_data);
+        // Variable products require the attribute map alongside variation_id.
+        // Resolve it from the variation object so callers don't have to send it.
+        $variation = [];
+        if ($variation_id > 0) {
+            $variation_obj = wc_get_product($variation_id);
+            if ($variation_obj instanceof WC_Product_Variation) {
+                $variation = $variation_obj->get_variation_attributes();
+            }
+        }
+        // Fallback: if parent is variable but no variation_id was passed, use
+        // the variant payload from the design body and try to find a match.
+        if ($product instanceof WC_Product_Variable && empty($variation) && !empty($design['variant'])) {
+            $candidates = $product->get_available_variations();
+            $needle     = array_change_key_case((array) $design['variant'], CASE_LOWER);
+            foreach ($candidates as $cand) {
+                $attrs_lc = [];
+                foreach ($cand['attributes'] as $k => $v) {
+                    // attribute_pa_color → color
+                    $key = strtolower(str_replace(['attribute_pa_', 'attribute_'], '', $k));
+                    $attrs_lc[$key] = strtolower((string) $v);
+                }
+                $match = true;
+                foreach ($needle as $nk => $nv) {
+                    if (!isset($attrs_lc[$nk]) || $attrs_lc[$nk] !== strtolower((string) $nv)) {
+                        $match = false; break;
+                    }
+                }
+                if ($match) {
+                    $variation_id = (int) $cand['variation_id'];
+                    $vobj = wc_get_product($variation_id);
+                    if ($vobj instanceof WC_Product_Variation) {
+                        $variation = $vobj->get_variation_attributes();
+                    }
+                    break;
+                }
+            }
+        }
+
+        $cart_item_key = WC()->cart->add_to_cart($product_id, $quantity, $variation_id, $variation, $cart_item_data);
 
         if (! $cart_item_key) {
-            return new WP_REST_Response(['code' => 'cart_error', 'message' => 'Could not add item to cart.'], 500);
+            return new WP_REST_Response(['code' => 'cart_error', 'message' => 'Could not add item to cart. (Check that variation attributes match an available variation.)'], 500);
         }
 
         return new WP_REST_Response([

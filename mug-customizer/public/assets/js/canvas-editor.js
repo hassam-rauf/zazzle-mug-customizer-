@@ -2518,6 +2518,7 @@
 
     // ── Review page wiring ─────────────────────────────────────────────────
     bindReviewPage();
+    bindJustAddedModal();
 
     // Zoom
     const zoomOut = document.getElementById('btn-zoom-out');
@@ -3374,6 +3375,66 @@
     bindBackgroundPanel();
   }
 
+  // ── "Just added to your cart!" modal ───────────────────────────────────
+  function showJustAddedModal(opts) {
+    opts = opts || {};
+    var modal    = document.getElementById('just-added-modal');
+    var backdrop = document.getElementById('just-added-backdrop');
+    if (!modal) return;
+
+    // Populate
+    var priceEl = document.getElementById('just-added-price');
+    var qtyEl   = document.getElementById('just-added-qty');
+    if (priceEl) priceEl.textContent = opts.price || '$0.00';
+    if (qtyEl)   qtyEl.textContent   = String(opts.qty || 1);
+
+    // Render thumbnail
+    var thumbCv = document.getElementById('just-added-thumb');
+    if (thumbCv && opts.thumb) {
+      var img = new Image();
+      img.onload = function () {
+        var ctx = thumbCv.getContext('2d');
+        ctx.clearRect(0, 0, thumbCv.width, thumbCv.height);
+        var s = Math.max(thumbCv.width / img.width, thumbCv.height / img.height);
+        var w = img.width * s, h = img.height * s;
+        ctx.drawImage(img, (thumbCv.width - w) / 2, (thumbCv.height - h) / 2, w, h);
+      };
+      img.src = opts.thumb;
+    }
+
+    // Reveal
+    if (backdrop) { backdrop.hidden = false; requestAnimationFrame(function () { backdrop.classList.add('is-open'); }); }
+    modal.hidden = false;
+    requestAnimationFrame(function () { modal.classList.add('is-open'); });
+  }
+
+  function hideJustAddedModal() {
+    var modal    = document.getElementById('just-added-modal');
+    var backdrop = document.getElementById('just-added-backdrop');
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    if (backdrop) backdrop.classList.remove('is-open');
+    setTimeout(function () {
+      modal.hidden = true;
+      if (backdrop) backdrop.hidden = true;
+    }, 320);
+  }
+
+  function bindJustAddedModal() {
+    var closeBtn   = document.getElementById('just-added-close');
+    var continueBtn = document.getElementById('just-added-continue');
+    var backdrop   = document.getElementById('just-added-backdrop');
+    if (closeBtn)    closeBtn.addEventListener('click', hideJustAddedModal);
+    if (continueBtn) continueBtn.addEventListener('click', hideJustAddedModal);
+    if (backdrop)    backdrop.addEventListener('click', hideJustAddedModal);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        var m = document.getElementById('just-added-modal');
+        if (m && !m.hidden) hideJustAddedModal();
+      }
+    });
+  }
+
   // ── Review page (in-page tab) ──────────────────────────────────────────
   function _formatShipDate(addBizDays) {
     var d = new Date();
@@ -3493,26 +3554,72 @@
       updateSubtotal();
     });
 
-    // Add to Cart — serialise design + delegate to existing flow
+    // Add to Cart — serialise design, POST to plugin REST /cart/add (which
+    // resolves variation attributes server-side), then show "Just added!" modal
     var atc = document.getElementById('review-add-to-cart');
     if (atc) atc.addEventListener('click', function () {
       var qty = Math.max(1, Math.min(99, parseInt(qtyInput.value, 10) || 1));
       atc.classList.add('is-loading');
       atc.querySelector('span').textContent = 'Adding…';
+
+      var unitPrice = parseFloat((rail && rail.dataset.unitPrice) || '0') || 0;
+      var subtotal  = (unitPrice * qty).toFixed(2);
+
+      // Capture the active angle preview as the modal thumbnail
+      var thumbDataURL = '';
       try {
-        var design = serializeDesign(true);
-        saveToSession(design);
-        // Reuse existing review URL flow if present, otherwise emit event
-        if (cfg && cfg.reviewUrl) {
-          window.location.href = cfg.reviewUrl + '&qty=' + qty;
-        } else {
-          showToast('Added to cart');
-        }
-      } catch (e) {
-        atc.classList.remove('is-loading');
-        atc.querySelector('span').textContent = 'Add to Cart';
-        showToast('Couldn’t add — try again');
-      }
+        var mainCv = document.getElementById('review-main-canvas');
+        if (mainCv) thumbDataURL = mainCv.toDataURL('image/png');
+      } catch (e) {}
+
+      // Build the design payload and POST to the plugin REST endpoint.
+      // The endpoint at mug-customizer/v1/cart/add validates and adds via
+      // WC()->cart->add_to_cart() with proper variation attribute resolution.
+      var design = {};
+      try { design = serializeDesign(true); } catch (e) {}
+      try { saveToSession(design); } catch (e) {}
+
+      var apiRoot = (mc && mc.apiRoot) || '/wp-json/mug-customizer/v1/';
+      var endpoint = apiRoot.replace(/\/$/, '') + '/cart/add';
+      var headers = { 'Content-Type': 'application/json' };
+      if (mc && mc.nonce) headers['X-WP-Nonce'] = mc.nonce;
+
+      fetch(endpoint, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: headers,
+        body: JSON.stringify({
+          product_id:   (cfg && cfg.productId)   || 0,
+          variation_id: (cfg && cfg.variationId) || 0,
+          quantity:     qty,
+          design:       design,
+        }),
+      })
+        .then(function (r) {
+          return r.json().then(function (j) { return { ok: r.ok, body: j }; });
+        })
+        .then(function (res) {
+          atc.classList.remove('is-loading');
+          atc.querySelector('span').textContent = 'Add to Cart';
+          if (!res.ok || !res.body || res.body.success !== true) {
+            var msg = (res.body && res.body.message) || 'Couldn’t add — try again';
+            showToast(msg);
+            return;
+          }
+          showJustAddedModal({ qty: qty, price: '$' + subtotal, thumb: thumbDataURL });
+          document.body.dispatchEvent(new CustomEvent('added_to_cart', {
+            detail: { product_id: (cfg && cfg.productId) || 0, qty: qty }
+          }));
+          // Stash cart URL from server response so the modal's "View Cart"
+          // button uses the freshest URL (in case it changed mid-session)
+          var viewBtn = document.getElementById('just-added-view-cart');
+          if (viewBtn && res.body.cart_url) viewBtn.href = res.body.cart_url;
+        })
+        .catch(function () {
+          atc.classList.remove('is-loading');
+          atc.querySelector('span').textContent = 'Add to Cart';
+          showToast('Couldn’t add — try again');
+        });
     });
 
     // Re-render main when window resizes (handles responsive layout shift)

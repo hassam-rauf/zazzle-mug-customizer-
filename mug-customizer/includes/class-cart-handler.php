@@ -21,6 +21,36 @@ class Mug_Customizer_Cart_Handler {
 
         // Add-on pricing
         add_action('woocommerce_cart_calculate_fees',              [$this, 'add_addon_fees']);
+
+        // Override default WC cart template with our Zazzle-styled version
+        add_filter('woocommerce_locate_template',                   [$this, 'override_cart_template'], 10, 3);
+
+        // Enqueue cart-page styles only on cart screen
+        add_action('wp_enqueue_scripts',                            [$this, 'enqueue_cart_assets']);
+    }
+
+    public function override_cart_template(string $template, string $template_name, string $template_path): string {
+        $overrides = [
+            'cart/cart.php'              => MUG_CUSTOMIZER_PLUGIN_DIR . 'templates/woocommerce/cart/cart.php',
+            'checkout/form-checkout.php' => MUG_CUSTOMIZER_PLUGIN_DIR . 'templates/woocommerce/checkout/form-checkout.php',
+        ];
+        if (isset($overrides[$template_name]) && file_exists($overrides[$template_name])) {
+            return $overrides[$template_name];
+        }
+        return $template;
+    }
+
+    public function enqueue_cart_assets(): void {
+        if (!function_exists('is_cart') && !function_exists('is_checkout')) return;
+        $on_cart_or_checkout = (function_exists('is_cart') && is_cart())
+            || (function_exists('is_checkout') && is_checkout());
+        if (!$on_cart_or_checkout) return;
+        wp_enqueue_style(
+            'mug-customizer-cart',
+            MUG_CUSTOMIZER_PLUGIN_URL . 'public/assets/css/cart.css',
+            ['woocommerce-general'],
+            MUG_CUSTOMIZER_VERSION
+        );
     }
 
     // ── Cart hooks ────────────────────────────────────────────────────────────
