@@ -87,11 +87,15 @@ $first_name   = $current_user->ID ? ($current_user->first_name ?: $current_user-
             if (!$product || !$product->exists() || $cart_item['quantity'] <= 0) continue;
             $name      = apply_filters('woocommerce_cart_item_name', $product->get_name(), $cart_item, $cart_item_key);
             $thumbnail = apply_filters('woocommerce_cart_item_thumbnail', $product->get_image('woocommerce_thumbnail'), $cart_item, $cart_item_key);
+            // v2.0.7: only use saved-file preview, never the inline data URL
+            // (legacy cart items carry pre-fix dirty editor-canvas data URLs).
             $design_thumb = '';
             if (!empty($cart_item['_mug_design']) && class_exists('Mug_Customizer_Design_Storage')) {
               $storage = new Mug_Customizer_Design_Storage();
               $design  = $storage->decode($cart_item['_mug_design']);
-              if (!is_wp_error($design) && !empty($design['preview_url'])) $design_thumb = $design['preview_url'];
+              if (!is_wp_error($design) && !empty($design['preview_url'])) {
+                $design_thumb = $design['preview_url'];
+              }
             }
             $line_subtotal = $product->get_price() * $cart_item['quantity'];
             ?>

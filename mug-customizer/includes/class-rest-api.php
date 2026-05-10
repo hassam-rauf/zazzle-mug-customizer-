@@ -173,6 +173,21 @@ class Mug_Customizer_Rest_Api {
             return new WP_REST_Response(['code' => 'not_purchasable', 'message' => 'Product is not available.'], 409);
         }
 
+        // Persist the rendered design preview (mug + user design composite)
+        // as a PNG file in uploads/. If the file save succeeds we drop the
+        // giant base64 from the payload (keeps cart-item meta lean). If it
+        // fails (write permission etc.), we KEEP mockup_data_url so the cart
+        // template can still render the design inline as `data:` URL.
+        if (!empty($design['mockup_data_url'])) {
+            $preview_url = $storage->save_preview_from_data_url($design['mockup_data_url']);
+            if (!is_wp_error($preview_url)) {
+                $design['preview_url'] = $preview_url;
+                unset($design['mockup_data_url']);
+            } else {
+                error_log('[MugCustomizer] preview save failed: ' . $preview_url->get_error_message());
+            }
+        }
+
         $cart_item_data = [
             '_mug_design'  => $storage->encode($design),
             '_mug_variant' => wp_json_encode($design['variant'] ?? []),

@@ -1110,25 +1110,29 @@
     });
   }
 
-  // Capture only the design layer: hide mug background AND all print-area
-  // guide objects (excludeFromExport) so neither bleeds into the preview/export.
+  // Capture only the design layer: hide mug background AND remove all
+  // print-area guide objects (excludeFromExport) so neither bleeds into the
+  // preview/export. We REMOVE rather than toggle .visible — proved more
+  // reliable across fabric render paths.
   function _captureDesignLayer(multiplier) {
     const origBg      = canvas.backgroundImage;
     const origBgColor = canvas.backgroundColor;
     const guides = canvas.getObjects().filter(function (o) { return o.excludeFromExport; });
-    guides.forEach(function (g) { g.visible = false; });
     let url = '';
     try {
       canvas.backgroundImage = null;
-      canvas.backgroundColor = null;   // transparent capture — no canvas-bg leak through preview tint
+      canvas.backgroundColor = null;
+      guides.forEach(function (g) { canvas.remove(g); });
+      canvas.renderAll();
       url = canvas.toDataURL({ format: 'png', multiplier: multiplier || 1 });
     } catch (e) {
       console.warn('[MugCustomizer] capture skipped:', e && e.message);
     } finally {
       canvas.backgroundImage = origBg;
       canvas.backgroundColor = origBgColor;
-      guides.forEach(function (g) { g.visible = true; });
-      canvas.requestRenderAll();
+      guides.forEach(function (g) { canvas.add(g); });
+      _printAreaGuides.forEach(function (g) { canvas.bringForward(g); });
+      canvas.renderAll();
     }
     return url;
   }
@@ -1847,15 +1851,27 @@
 
   // ── Auto Save ─────────────────────────────────────────────────────────────
   function serializeDesign(highRes) {
+    // REMOVE print-area guides (dashed rect, safe-area pill, dim label etc.)
+    // during the capture so they don't bleed into the cart thumbnail.
+    // The hide-via-visible approach proved unreliable in some fabric paths,
+    // so we yank them out, capture, and put them back.
     let mockupUrl = '';
+    const guides = canvas.getObjects().filter(function (o) { return o.excludeFromExport; });
     try {
+      guides.forEach(function (g) { canvas.remove(g); });
+      canvas.renderAll();
       mockupUrl = canvas.toDataURL({ format: 'png', multiplier: highRes ? 2 : 1 });
     } catch (err) {
       console.warn('[MugCustomizer] mockup dataUrl skipped:', err && err.message);
+    } finally {
+      guides.forEach(function (g) { canvas.add(g); });
+      // Push guides back to bottom so user objects remain on top
+      _printAreaGuides.forEach(function (g) { canvas.bringForward(g); });
+      canvas.renderAll();
     }
     return {
       canvas_json:     canvas.toJSON(['excludeFromExport']),
-      mockup_data_url: mockupUrl,                     // mug + design (cart thumbnail)
+      mockup_data_url: mockupUrl,                     // mug + design (cart thumbnail, no guides)
       print_file:     highRes ? exportPrintFile() : null, // production-ready (Review only)
       variant:         selectedVariant,
       addons:          selectedAddons,
@@ -3435,6 +3451,90 @@
     });
   }
 
+  // ── Review-snapshot capture (for cart-item thumbnail) ──────────────────
+  // Renders a fresh, full-resolution version of the currently active Review
+  // angle into an offscreen canvas, then returns a PNG data URL via callback.
+  // This guarantees the cart thumbnail is the latest design + correct angle,
+  // even if the review-main-canvas is stale or async-rendering.
+  function _captureReviewSnapshot(callback) {
+    var page = document.getElementById('review-page');
+    if (!page) { callback(''); return; }
+    var active = page.querySelector('.review-thumb.active') || page.querySelector('.review-thumb');
+    var key = active ? active.dataset.angleKey : 'left';
+    var ang = (typeof _angleByKey === 'function') ? _angleByKey(key) : null;
+    if (!ang) { callback(''); return; }
+
+    var off = document.createElement('canvas');
+    off.width  = 800;
+    off.height = 800;
+
+    var dUrl = _captureDesignLayer(1);
+    if (!dUrl) {
+      // No design captured yet — still render the bare mug photo
+      _loadPreviewPhoto(ang.img, function (photoEl) {
+        renderRealAngleView(off.getContext('2d'), off.width, off.height, null, photoEl, ang.paPct, ang.angle);
+        try { callback(off.toDataURL('image/png')); } catch (e) { callback(''); }
+      });
+      return;
+    }
+
+    var dImg = new Image();
+    dImg.onload = function () {
+      _loadPreviewPhoto(ang.img, function (photoEl) {
+        renderRealAngleView(off.getContext('2d'), off.width, off.height, dImg, photoEl, ang.paPct, ang.angle);
+        try { callback(off.toDataURL('image/png')); } catch (e) { callback(''); }
+      });
+    };
+    dImg.onerror = function () { callback(''); };
+    dImg.src = dUrl;
+  }
+
+  // POST design payload to the plugin REST /cart/add endpoint, then fire
+  // the "Just added!" drawer on success.
+  function _postAddToCart(design, qty, thumbDataURL, subtotal, atcBtn) {
+    var apiRoot  = (mc && mc.apiRoot) || '/wp-json/mug-customizer/v1/';
+    var endpoint = apiRoot.replace(/\/$/, '') + '/cart/add';
+    var headers  = { 'Content-Type': 'application/json' };
+    if (mc && mc.nonce) headers['X-WP-Nonce'] = mc.nonce;
+
+    fetch(endpoint, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: headers,
+      body: JSON.stringify({
+        product_id:   (cfg && cfg.productId)   || 0,
+        variation_id: (cfg && cfg.variationId) || 0,
+        quantity:     qty,
+        design:       design,
+      }),
+    })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+      .then(function (res) {
+        if (atcBtn) {
+          atcBtn.classList.remove('is-loading');
+          var span = atcBtn.querySelector('span'); if (span) span.textContent = 'Add to Cart';
+        }
+        if (!res.ok || !res.body || res.body.success !== true) {
+          var msg = (res.body && res.body.message) || 'Couldn’t add — try again';
+          showToast(msg);
+          return;
+        }
+        showJustAddedModal({ qty: qty, price: '$' + subtotal, thumb: thumbDataURL });
+        document.body.dispatchEvent(new CustomEvent('added_to_cart', {
+          detail: { product_id: (cfg && cfg.productId) || 0, qty: qty }
+        }));
+        var viewBtn = document.getElementById('just-added-view-cart');
+        if (viewBtn && res.body.cart_url) viewBtn.href = res.body.cart_url;
+      })
+      .catch(function () {
+        if (atcBtn) {
+          atcBtn.classList.remove('is-loading');
+          var span = atcBtn.querySelector('span'); if (span) span.textContent = 'Add to Cart';
+        }
+        showToast('Couldn’t add — try again');
+      });
+  }
+
   // ── Review page (in-page tab) ──────────────────────────────────────────
   function _formatShipDate(addBizDays) {
     var d = new Date();
@@ -3565,20 +3665,27 @@
       var unitPrice = parseFloat((rail && rail.dataset.unitPrice) || '0') || 0;
       var subtotal  = (unitPrice * qty).toFixed(2);
 
-      // Capture the active angle preview as the modal thumbnail
-      var thumbDataURL = '';
-      try {
-        var mainCv = document.getElementById('review-main-canvas');
-        if (mainCv) thumbDataURL = mainCv.toDataURL('image/png');
-      } catch (e) {}
-
-      // Build the design payload and POST to the plugin REST endpoint.
-      // The endpoint at mug-customizer/v1/cart/add validates and adds via
-      // WC()->cart->add_to_cart() with proper variation attribute resolution.
+      // Build the design payload (canvas JSON + variant + addons).
+      // Drop the editor's mockup_data_url — we always replace it with the
+      // Review-angle snapshot (real photo + cylinder-projected design),
+      // which is what the cart should display.
       var design = {};
       try { design = serializeDesign(true); } catch (e) {}
-      try { saveToSession(design); } catch (e) {}
+      delete design.mockup_data_url;
 
+      // Render a FRESH high-res snapshot of the active Review angle into an
+      // offscreen canvas (guarantees the cart thumbnail is up to date — not
+      // a stale or half-rendered review-main-canvas pixel buffer).
+      _captureReviewSnapshot(function (snapshotDataURL) {
+        if (snapshotDataURL) {
+          design.mockup_data_url = snapshotDataURL;
+        }
+        try { saveToSession(design); } catch (e) {}
+        _postAddToCart(design, qty, snapshotDataURL || '', subtotal, atc);
+      });
+      return;
+
+      // (legacy unreachable — kept for diff context)
       var apiRoot = (mc && mc.apiRoot) || '/wp-json/mug-customizer/v1/';
       var endpoint = apiRoot.replace(/\/$/, '') + '/cart/add';
       var headers = { 'Content-Type': 'application/json' };

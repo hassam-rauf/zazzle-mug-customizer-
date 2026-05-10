@@ -77,7 +77,13 @@ $promo_code   = get_option('mc_promo_code', 'MAYDEALS4YOU');
           $thumbnail         = apply_filters('woocommerce_cart_item_thumbnail', $product->get_image('woocommerce_thumbnail'), $cart_item, $cart_item_key);
           $product_name      = apply_filters('woocommerce_cart_item_name', $product->get_name(), $cart_item, $cart_item_key);
 
-          // Mug design preview thumbnail (if available)
+          // Mug design preview thumbnail — ONLY use the saved file URL.
+          // The inline `mockup_data_url` fallback was removed in v2.0.7 because
+          // legacy cart items (added before v2.0.5) carry pre-fix data URLs that
+          // contain editor chrome (green dashed outline, Safe-area pill, dim
+          // labels, "Your text here" placeholder). If `preview_url` is missing,
+          // fall through to the default WC product image instead of leaking
+          // dirty canvas pixels into the cart.
           $design_thumb = '';
           if (!empty($cart_item['_mug_design']) && class_exists('Mug_Customizer_Design_Storage')) {
             $storage = new Mug_Customizer_Design_Storage();

@@ -53,7 +53,7 @@
 
 .mc-cart-item {
   display: grid;
-  grid-template-columns: 140px minmax(220px, 1fr) 84px 140px;
+  grid-template-columns: 160px minmax(220px, 1fr) 84px 140px;
   gap: 20px;
   padding: 20px 0;
   border-bottom: 1px solid #e5e7eb;
@@ -62,12 +62,13 @@
 .mc-cart-item:first-child { border-top: 1px solid #e5e7eb; }
 
 .mc-item-image {
-  width: 140px; height: 140px;
-  border-radius: 8px; overflow: hidden;
-  background: #f9fafb;
+  width: 160px; height: 160px;
+  border-radius: 10px; overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #f3f4f6;
 }
 .mc-item-image img {
-  width: 100%; height: 100%; object-fit: contain;
+  width: 100%; height: 100%; object-fit: cover;
   display: block;
 }
 
@@ -492,11 +493,12 @@
 .mc-rail-item { display: flex; gap: 12px; align-items: flex-start; }
 .mc-rail-thumb {
   position: relative;
-  width: 64px; height: 64px;
-  background: #f9fafb; border-radius: 8px; overflow: hidden;
+  width: 80px; height: 80px;
+  background: #ffffff; border-radius: 8px; overflow: hidden;
+  border: 1px solid #f3f4f6;
   flex-shrink: 0;
 }
-.mc-rail-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.mc-rail-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .mc-rail-qty {
   position: absolute; top: -6px; right: -6px;
   min-width: 22px; height: 22px;

@@ -45,4 +45,62 @@ class Mug_Customizer_Design_Storage {
         $objects = $canvas['objects'] ?? [];
         return count($objects) > 0;
     }
+
+    /**
+     * Decode a data URL (e.g. "data:image/png;base64,...") and persist it as a
+     * PNG file in `uploads/mug-designs/`. Returns the public URL on success
+     * or WP_Error on failure.
+     */
+    public function save_preview_from_data_url(string $data_url) {
+        if (strpos($data_url, 'data:image/') !== 0) {
+            return new WP_Error('bad_data_url', 'Not a valid image data URL.');
+        }
+
+        $comma = strpos($data_url, ',');
+        if ($comma === false) {
+            return new WP_Error('malformed_data_url', 'Data URL is malformed.');
+        }
+        $base64 = substr($data_url, $comma + 1);
+        $binary = base64_decode($base64, true);
+        if ($binary === false) {
+            return new WP_Error('decode_failed', 'Failed to decode image data.');
+        }
+
+        // Cap at ~6 MB to keep storage sane
+        if (strlen($binary) > 6 * 1024 * 1024) {
+            return new WP_Error('too_large', 'Preview image too large.');
+        }
+
+        $upload  = wp_upload_dir();
+        $sub_dir = '/' . MUG_CUSTOMIZER_UPLOAD_DIR . '/previews';
+        $dir     = $upload['basedir'] . $sub_dir;
+        $url_dir = $upload['baseurl'] . $sub_dir;
+        wp_mkdir_p($dir);
+
+        // The parent `mug-designs/.htaccess` denies all HTTP access to protect
+        // raw design JSON / print files. Cart thumbnails LIVE inside this tree
+        // (`mug-designs/previews/*.png`) so we must re-allow PNG fetches at the
+        // subdirectory level. Idempotent — only writes if missing.
+        $allow_htaccess = $dir . '/.htaccess';
+        if (! file_exists($allow_htaccess)) {
+            file_put_contents(
+                $allow_htaccess,
+                "<Files *.png>\n"
+                . "  Order allow,deny\n"
+                . "  Allow from all\n"
+                . "  Require all granted\n"
+                . "</Files>\n"
+            );
+        }
+
+        $hash     = substr(md5($binary), 0, 12);
+        $filename = 'preview-' . $hash . '-' . time() . '.png';
+        $path     = $dir . '/' . $filename;
+
+        if (file_put_contents($path, $binary) === false) {
+            return new WP_Error('write_failed', 'Could not write preview file.');
+        }
+
+        return $url_dir . '/' . $filename;
+    }
 }
