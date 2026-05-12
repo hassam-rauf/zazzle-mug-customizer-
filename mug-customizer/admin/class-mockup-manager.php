@@ -32,7 +32,9 @@ class Mug_Customizer_Mockup_Manager {
         $styles = ['classic', 'travel', 'espresso', 'two-tone'];
         $sizes  = ['11oz', '15oz', '20oz'];
         $colors = ['black', 'white', 'red', 'blue', 'green'];
-        $angles = ['front', 'back', 'side', 'lifestyle'];
+        // 7 angles — must match the PDP image gallery + editor + preview modal.
+        // Variant key pattern: {style}-{size}-{color}-{angle} (all lowercase, hyphen-separated).
+        $angles = ['front', 'front-left', 'front-right', 'left', 'right', 'handle', 'lifestyle'];
 
         echo '<div class="mug-customizer-metabox">';
 

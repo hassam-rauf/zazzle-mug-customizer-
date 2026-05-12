@@ -58,8 +58,12 @@
   // (the visible printable arc is slightly narrower than the body silhouette).
   var MUG_VIEWS = {
     center: {
-      label:    'Center',
-      mugFile:  'mug-classic-white.png',
+      label:    'Left',
+      // `angle` is the admin variant-key suffix used to look up an
+      // admin-uploaded photo from mockupMap. `mugFile` is the shipped
+      // fallback when no admin upload exists.
+      angle:    'left',
+      mugFile:  'mug-left.jpg',
       mugLeft:  30,
       // Calibrated to industry-standard 11oz ceramic mug, anchored to the
       // photographed mug PNG (mug-relative percentages — survives canvas
@@ -188,14 +192,22 @@
 
   function getMugUrl(angle) {
     angle = angle || 'front';
-    // Active view overrides the variant-keyed mockup (multi-angle view switcher)
+    // Active view's `angle` (if defined) is the admin variant-key suffix to
+    // look up. Falling back to the angle arg keeps non-view callers working.
     var view = MUG_VIEWS[_activeView];
+    var lookupAngle = (view && view.angle) ? view.angle : angle;
+
+    // Variant-specific admin upload wins over shipped photo.
+    const key = buildVariantKey(selectedVariant.style, selectedVariant.size, selectedVariant.color, lookupAngle);
+    const url  = (mc.mockupMap || {})[key];
+    if (url) return url;
+
+    // Active view's shipped photo
     if (view && view.mugFile) {
       return mc.pluginUrl + 'public/assets/images/' + view.mugFile;
     }
-    const key = buildVariantKey(selectedVariant.style, selectedVariant.size, selectedVariant.color, angle);
-    const url  = (mc.mockupMap || {})[key];
-    return url || (mc.pluginUrl + 'public/assets/images/mug-classic-white.png');
+    // Last-resort shipped default
+    return mc.pluginUrl + 'public/assets/images/mug-left.jpg';
   }
 
   function loadMugBackground(callback) {
@@ -1654,24 +1666,48 @@
   // (as a percentage of that photo's natural dimensions). The design is
   // projected onto the print-area via cylinder-column slicing — same math
   // as the live thumb, just per-photo.
+  // `adminKey` matches the angle suffix in the admin mockupMap variant key
+  // ({style}-{size}-{color}-{adminKey}). When set, _loadPreviewPhoto will
+  // first look up an admin-uploaded photo and fall back to the shipped `img`.
   var _PREVIEW_ANGLES = [
-    { key: 'left',       label: 'Left',     img: 'mug-left.jpg',        angle: -70, paPct: { x: 0.36, y: 0.30, w: 0.42, h: 0.38 } },
-    { key: 'frontLeft',  label: 'Front L',  img: 'mug-front-left.jpg',  angle: -35, paPct: { x: 0.36, y: 0.32, w: 0.40, h: 0.34 } },
-    { key: 'center',     label: 'Center',   img: 'mug-center.jpg',      angle:   0, paPct: { x: 0.32, y: 0.34, w: 0.40, h: 0.32 } },
-    { key: 'frontRight', label: 'Front R',  img: 'mug-front-right.jpg', angle:  35, paPct: { x: 0.26, y: 0.32, w: 0.40, h: 0.34 } },
-    { key: 'right',      label: 'Right',    img: 'mug-right.jpg',       angle:  70, paPct: { x: 0.24, y: 0.30, w: 0.42, h: 0.38 } },
-    { key: 'handle',     label: 'Handle',   img: 'mug-handle.jpg',      angle: 130, paPct: null },
-    { key: 'donut',      label: 'Top View', img: 'mug-donut.jpg',       angle: -999, paPct: null, isDonut: true },
+    { key: 'left',       adminKey: 'left',        label: 'Left',     img: 'mug-left.jpg',        angle: -70, paPct: { x: 0.36, y: 0.30, w: 0.42, h: 0.38 } },
+    { key: 'frontLeft',  adminKey: 'front-left',  label: 'Front L',  img: 'mug-front-left.jpg',  angle: -35, paPct: { x: 0.36, y: 0.32, w: 0.40, h: 0.34 } },
+    { key: 'center',     adminKey: 'front',       label: 'Center',   img: 'mug-center.jpg',      angle:   0, paPct: { x: 0.32, y: 0.34, w: 0.40, h: 0.32 } },
+    { key: 'frontRight', adminKey: 'front-right', label: 'Front R',  img: 'mug-front-right.jpg', angle:  35, paPct: { x: 0.26, y: 0.32, w: 0.40, h: 0.34 } },
+    { key: 'right',      adminKey: 'right',       label: 'Right',    img: 'mug-right.jpg',       angle:  70, paPct: { x: 0.24, y: 0.30, w: 0.42, h: 0.38 } },
+    { key: 'handle',     adminKey: 'handle',      label: 'Handle',   img: 'mug-handle.jpg',      angle: 130, paPct: null },
+    { key: 'donut',      adminKey: 'lifestyle',   label: 'Top View', img: 'mug-donut.jpg',       angle: -999, paPct: null, isDonut: true },
   ];
 
   var _previewPhotoCache = {};
-  function _loadPreviewPhoto(filename, cb) {
-    if (_previewPhotoCache[filename]) { cb(_previewPhotoCache[filename]); return; }
+  // Backward-compatible signature: accepts a filename string (legacy) OR a
+  // _PREVIEW_ANGLES entry. When an entry is passed, looks up mockupMap with
+  // the variant + adminKey before falling back to the shipped photo.
+  function _loadPreviewPhoto(angOrFilename, cb) {
+    var filename, adminKey;
+    if (typeof angOrFilename === 'string') {
+      filename = angOrFilename;
+    } else if (angOrFilename) {
+      filename = angOrFilename.img;
+      adminKey = angOrFilename.adminKey;
+    }
+    if (!filename) { cb(null); return; }
+
+    // Variant-specific admin upload first
+    var customUrl = '';
+    if (adminKey) {
+      var mapKey = (selectedVariant.style + '-' + selectedVariant.size + '-' + selectedVariant.color + '-' + adminKey).toLowerCase().replace(/\s+/g, '-');
+      customUrl = (mc.mockupMap || {})[mapKey] || '';
+    }
+    var url      = customUrl || (mc.pluginUrl + 'public/assets/images/' + filename);
+    var cacheKey = url;
+
+    if (_previewPhotoCache[cacheKey]) { cb(_previewPhotoCache[cacheKey]); return; }
     var img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = function () { _previewPhotoCache[filename] = img; cb(img); };
+    img.onload  = function () { _previewPhotoCache[cacheKey] = img; cb(img); };
     img.onerror = function () { cb(null); };
-    img.src = mc.pluginUrl + 'public/assets/images/' + filename;
+    img.src = url;
   }
 
   function _angleByKey(key) {
@@ -1752,7 +1788,7 @@
         var ang  = _angleByKey(key);
         if (!ang) return;
         if (ang.isDonut) {
-          _loadPreviewPhoto(ang.img, function (photoEl) {
+          _loadPreviewPhoto(ang, function (photoEl) {
             // Donut: still uses canvas-2D ring projection over the donut photo
             tCtx.clearRect(0, 0, cv.width, cv.height);
             if (photoEl) {
@@ -1764,7 +1800,7 @@
             renderDonutView(tCtx, cv.width, cv.height, designImg, getPrintAreaPx());
           });
         } else {
-          _loadPreviewPhoto(ang.img, function (photoEl) {
+          _loadPreviewPhoto(ang, function (photoEl) {
             renderRealAngleView(tCtx, cv.width, cv.height, designImg, photoEl, ang.paPct, ang.angle);
           });
         }
@@ -1788,7 +1824,7 @@
     var ctx    = mainCv.getContext('2d');
 
     if (ang.isDonut) {
-      _loadPreviewPhoto(ang.img, function (photoEl) {
+      _loadPreviewPhoto(ang, function (photoEl) {
         ctx.clearRect(0, 0, mainCv.width, mainCv.height);
         if (photoEl) {
           var fit = Math.min(mainCv.width / photoEl.naturalWidth, mainCv.height / photoEl.naturalHeight);
@@ -1800,7 +1836,7 @@
       return;
     }
 
-    _loadPreviewPhoto(ang.img, function (photoEl) {
+    _loadPreviewPhoto(ang, function (photoEl) {
       renderRealAngleView(ctx, mainCv.width, mainCv.height, designImg, photoEl, ang.paPct, ang.angle);
     });
   }
@@ -3471,7 +3507,7 @@
     var dUrl = _captureDesignLayer(1);
     if (!dUrl) {
       // No design captured yet — still render the bare mug photo
-      _loadPreviewPhoto(ang.img, function (photoEl) {
+      _loadPreviewPhoto(ang, function (photoEl) {
         renderRealAngleView(off.getContext('2d'), off.width, off.height, null, photoEl, ang.paPct, ang.angle);
         try { callback(off.toDataURL('image/png')); } catch (e) { callback(''); }
       });
@@ -3480,7 +3516,7 @@
 
     var dImg = new Image();
     dImg.onload = function () {
-      _loadPreviewPhoto(ang.img, function (photoEl) {
+      _loadPreviewPhoto(ang, function (photoEl) {
         renderRealAngleView(off.getContext('2d'), off.width, off.height, dImg, photoEl, ang.paPct, ang.angle);
         try { callback(off.toDataURL('image/png')); } catch (e) { callback(''); }
       });
@@ -3571,7 +3607,7 @@
         var key = thumb.dataset.angleKey || 'center';
         var ang = _angleByKey(key);
         if (!ang) return;
-        _loadPreviewPhoto(ang.img, function (photoEl) {
+        _loadPreviewPhoto(ang, function (photoEl) {
           renderRealAngleView(ctx, cv.width, cv.height, dImg, photoEl, ang.paPct, ang.angle);
         });
       });
@@ -3593,7 +3629,7 @@
     var ctx = canvasEl.getContext('2d');
 
     function paint(designImg) {
-      _loadPreviewPhoto(ang.img, function (photoEl) {
+      _loadPreviewPhoto(ang, function (photoEl) {
         renderRealAngleView(ctx, canvasEl.width, canvasEl.height, designImg, photoEl, ang.paPct, ang.angle);
       });
     }

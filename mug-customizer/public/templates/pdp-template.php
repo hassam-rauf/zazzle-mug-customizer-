@@ -296,7 +296,13 @@ $color_hex = [
               </span>
               <span class="pdp-ss-name"><?php echo esc_html($style_opt); ?></span>
               <span class="pdp-ss-upgrade">
-                <?php echo $upgrade > 0 ? '+' . esc_html(wc_price($upgrade)) : '&mdash;'; ?>
+                <?php
+                // wc_price() returns HTML like <span class="woocommerce-Price-amount">...
+                // wp_strip_all_tags strips it to a plain "$1.75" suitable for the chip.
+                echo $upgrade > 0
+                    ? '+' . esc_html(wp_strip_all_tags(wc_price($upgrade)))
+                    : '&mdash;';
+                ?>
               </span>
             </button>
           <?php endforeach; ?>
