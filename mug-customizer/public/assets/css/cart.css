@@ -43,7 +43,7 @@
 /* ── Grid layout ────────────────────────────────────────────────────── */
 .mc-cart-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   gap: 32px;
   align-items: start;
 }
@@ -53,19 +53,21 @@
 
 .mc-cart-item {
   display: grid;
-  grid-template-columns: 160px minmax(220px, 1fr) 84px 140px;
+  grid-template-columns: 120px minmax(0, 1fr) 160px;
   gap: 20px;
   padding: 20px 0;
   border-bottom: 1px solid #e5e7eb;
   align-items: start;
+  min-width: 0;
 }
 .mc-cart-item:first-child { border-top: 1px solid #e5e7eb; }
 
 .mc-item-image {
-  width: 160px; height: 160px;
+  width: 120px; height: 120px;
   border-radius: 10px; overflow: hidden;
   background: #ffffff;
-  border: 1px solid #f3f4f6;
+  border: 1px solid #e5e7eb;
+  flex-shrink: 0;
 }
 .mc-item-image img {
   width: 100%; height: 100%; object-fit: cover;
@@ -111,11 +113,18 @@
 .mc-item-actions a:hover { text-decoration: underline; }
 .mc-item-sep { color: #9ca3af; margin: 0 6px; }
 
+/* Cart-item right aside — qty stepper + price stacked, right-aligned */
+.mc-item-aside {
+  display: flex; flex-direction: column;
+  align-items: flex-end;
+  gap: 14px;
+  min-width: 0;
+}
 .mc-item-qty {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
 }
 .mc-qty-select {
-  width: 60px; height: 38px;
+  width: 68px; height: 36px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
   background: #ffffff;
@@ -128,6 +137,7 @@
 .mc-item-price {
   text-align: right;
   display: flex; flex-direction: column; gap: 2px;
+  min-width: 0;
 }
 .mc-price-comp {
   font-size: 13px; color: #6b7280;
@@ -135,18 +145,11 @@
 }
 .mc-price-current {
   font-size: 22px; font-weight: 700; color: #1a1a1a;
+  white-space: nowrap;
 }
 .mc-price-saved {
   font-size: 13px; color: #dc2626; font-weight: 600;
-}
-.mc-price-promo {
-  display: inline-block;
-  background: #f3f4f6; color: #6b7280;
-  padding: 3px 10px;
-  border-radius: 4px;
-  font-size: 11px; font-weight: 600;
-  align-self: flex-end;
-  margin-top: 4px;
+  white-space: nowrap;
 }
 
 /* ── Promo + share row ──────────────────────────────────────────────── */
@@ -214,77 +217,43 @@
 }
 .mc-share-cart:hover { background: #eff6ff; }
 
-/* ── Right rail (Payment + Subtotal) ────────────────────────────────── */
+/* ── Right rail (Order Summary) ─────────────────────────────────────── */
 .mc-cart-rail {
-  background: #f9fafb;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
-  padding: 18px 16px;
+  padding: 24px 20px;
   position: sticky; top: 24px;
-  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
-.mc-pay-header {
+.mc-rail-heading {
   font-size: 16px; font-weight: 700; color: #1a1a1a;
-  margin: 0 0 12px 0;
-}
-.mc-pay-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
-.mc-pay-row {
-  display: flex; align-items: center; gap: 10px;
-  cursor: pointer;
-  padding: 6px 4px;
-  border-radius: 6px;
-  transition: background .12s;
-}
-.mc-pay-row:hover { background: rgba(255,255,255,0.6); }
-.mc-pay-row input[type="radio"] {
-  width: 18px; height: 18px;
-  accent-color: #1e40af;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.mc-pay-logos {
-  display: inline-flex; align-items: center; gap: 6px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-.mc-pay-logo {
-  display: inline-block;
-  padding: 3px 8px;
-  border-radius: 4px;
-  font-size: 10px; font-weight: 800;
-  letter-spacing: 0.4px;
-  text-align: center;
-  line-height: 1.4;
-  min-width: 36px;
-}
-.mc-pay-logo.visa  { color: #ffffff; background: #1a1f71; }
-.mc-pay-logo.mc    { color: #ffffff; background: #ea580c; }
-.mc-pay-logo.amex  { color: #ffffff; background: #2563eb; }
-.mc-pay-logo.paypal{ color: #0070ba; background: #ffffff; border: 1px solid #d1d5db; font-style: italic; padding: 3px 12px; }
-.mc-pay-logo.gpay  { color: #1a1a1a; background: #ffffff; border: 1px solid #d1d5db; padding: 3px 12px; }
-.mc-pay-logo.klarna{ color: #1a1a1a; background: #ffa8cd; padding: 3px 12px; }
-.mc-pay-logo.venmo { color: #ffffff; background: #008cff; padding: 3px 12px; }
-.mc-pay-tagline {
-  font-size: 12px; color: #6b7280;
-  margin-left: 2px;
-  white-space: nowrap;
-}
-
-.mc-rail-hr {
-  border: none; border-top: 1px solid #e5e7eb;
-  margin: 18px 0;
+  margin: 0 0 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
 }
 .mc-rail-subtotal-row {
   display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px;
   margin-bottom: 4px;
 }
 .mc-rail-label { font-size: 14px; font-weight: 600; color: #1a1a1a; }
-.mc-rail-prices { display: inline-flex; align-items: baseline; gap: 10px; }
-.mc-rail-comp { font-size: 14px; color: #6b7280; text-decoration: line-through; }
-.mc-rail-current { font-size: 18px; font-weight: 700; color: #1a1a1a; }
-.mc-rail-saved { font-size: 13px; color: #dc2626; text-align: right; margin-bottom: 16px; }
+.mc-rail-prices {
+  display: inline-flex; align-items: baseline; gap: 8px;
+  min-width: 0;
+}
+.mc-rail-comp { font-size: 13px; color: #9ca3af; text-decoration: line-through; }
+.mc-rail-current { font-size: 20px; font-weight: 700; color: #1a1a1a; white-space: nowrap; }
+.mc-rail-saved { font-size: 13px; color: #dc2626; text-align: right; margin-bottom: 4px; }
+
+.mc-rail-foot {
+  margin: 6px 0 16px 0;
+  font-size: 12px; color: #6b7280;
+}
 
 .mc-checkout-btn {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%;
   padding: 14px 16px;
   background: #fbbf24;
@@ -294,17 +263,46 @@
   font-size: 16px; font-weight: 700;
   text-decoration: none;
   cursor: pointer;
-  transition: background .12s;
+  transition: background .12s, transform .08s;
   letter-spacing: 0.2px;
+  box-sizing: border-box;
 }
 .mc-checkout-btn:hover { background: #f59e0b; color: #1a1a1a; }
-.mc-lock { font-size: 14px; }
+.mc-checkout-btn:active { transform: scale(0.99); }
+.mc-lock { font-size: 14px; line-height: 1; }
 
-.mc-rail-foot {
-  margin: 12px 0 0 0;
-  font-size: 11px; color: #6b7280;
+/* Trust strip — visible reassurance below CTA */
+.mc-trust-strip {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 14px;
+  font-size: 12px; color: #6b7280;
+}
+.mc-trust-icon-sm { font-size: 12px; line-height: 1; }
+.mc-trust-text { font-weight: 500; }
+
+/* Brand strip — decorative accepted-payment badges (NOT real gateways).
+   Real gateway selection happens on /checkout/. */
+.mc-brand-strip {
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed #e5e7eb;
+}
+.mc-brand {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px; font-weight: 800;
+  letter-spacing: 0.5px;
+  line-height: 1.2;
+  min-width: 38px;
   text-align: center;
 }
+.mc-brand.visa   { color: #ffffff; background: #1a1f71; }
+.mc-brand.mc     { color: #ffffff; background: #ea580c; }
+.mc-brand.amex   { color: #ffffff; background: #2563eb; }
+.mc-brand.paypal { color: #0070ba; background: #ffffff; border: 1px solid #d1d5db; font-style: italic; padding: 3px 10px; }
 
 /* ── Responsive ─────────────────────────────────────────────────────── */
 @media (max-width: 980px) {
@@ -313,17 +311,19 @@
 }
 @media (max-width: 720px) {
   .mc-cart-item {
-    grid-template-columns: 120px 1fr;
+    grid-template-columns: 100px 1fr;
     gap: 14px;
   }
-  .mc-item-image { width: 120px; height: 120px; }
-  .mc-item-qty, .mc-item-price {
-    grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: space-between;
-    text-align: left;
+  .mc-item-image { width: 100px; height: 100px; }
+  .mc-item-aside {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 8px;
+    border-top: 1px solid #f3f4f6;
   }
-  .mc-item-qty { padding-top: 8px; }
-  .mc-item-price { padding-top: 4px; }
-  .mc-item-price .mc-price-promo { align-self: auto; }
+  .mc-item-price { text-align: right; }
 }
 
 /* ── Checkout page (Zazzle parity) ─────────────────────────────────────── */
@@ -350,6 +350,26 @@
   align-items: start;
 }
 
+/* Top trust badges row (3-icon strip above checkout grid) */
+.mc-trust-row {
+  display: flex; gap: 24px; justify-content: center;
+  margin: 16px 0 24px;
+  padding: 14px 18px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+.mc-trust-item {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: #374151;
+}
+.mc-trust-i { font-size: 16px; line-height: 1; }
+@media (max-width: 720px) {
+  .mc-trust-row { gap: 14px; padding: 10px 12px; }
+  .mc-trust-item { font-size: 12px; }
+}
+
 /* LEFT — form sections */
 .mc-checkout-main { min-width: 0; }
 .mc-checkout-section {
@@ -359,24 +379,34 @@
   padding: 22px 24px;
   margin-bottom: 18px;
 }
+
+/* Section heading with numbered step badge + icon */
 .mc-section-title {
+  display: flex; align-items: center; gap: 10px;
   font-size: 18px; font-weight: 700; color: #1a1a1a;
-  margin: 0 0 16px 0;
+  margin: 0 0 18px 0;
 }
-
-/* Make WC's nested col2-set wrap inside .mc-checkout-section */
-.mc-checkout-section .col2-set {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
+.mc-step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  background: #1a1a1a; color: #ffffff;
+  border-radius: 50%;
+  font-size: 14px; font-weight: 700;
+  flex-shrink: 0;
 }
-.mc-checkout-section .col2-set > .col-1,
-.mc-checkout-section .col2-set > .col-2 { width: 100%; min-width: 0; }
-.mc-checkout-section .col2-set > .col-2:empty,
-.mc-checkout-section .col2-set > .col-2 > h3:only-child { display: none; }
+.mc-step-icon { font-size: 18px; line-height: 1; }
 
-@media (max-width: 720px) {
-  .mc-checkout-section .col2-set { grid-template-columns: 1fr; }
+/* Customer details — single column flow, WC handles ship-to-different
+   toggle natively. No forced 2-col grid. */
+.mc-checkout-billing,
+.mc-checkout-shipping { min-width: 0; }
+.mc-checkout-shipping { margin-top: 14px; }
+.mc-checkout-shipping:empty { display: none; }
+.mc-checkout-shipping h3 {
+  font-size: 14px; font-weight: 700; color: #374151;
+  margin: 8px 0 10px;
+  padding-top: 14px;
+  border-top: 1px solid #f3f4f6;
 }
 
 /* WC field overrides — match Zazzle look */
@@ -443,25 +473,154 @@
   border-radius: 8px;
 }
 
-/* Place Order button */
-.mc-checkout-section #place_order,
-.mc-checkout-section button#place_order {
-  display: block !important;
-  width: 100% !important;
-  padding: 14px 16px !important;
-  background: #fbbf24 !important;
-  color: #1a1a1a !important;
-  border: none !important;
-  border-radius: 999px !important;
-  font-size: 16px !important;
-  font-weight: 700 !important;
-  cursor: pointer !important;
-  transition: background .12s;
-  margin-top: 14px;
+/* Place Order button — selector specificity matches WC's defaults so no
+   !important needed. WC outputs button#place_order; our specificity is
+   .mc-checkout-section > .form-row.place-order > button#place_order. */
+.mc-checkout-section .form-row.place-order { padding: 0; margin: 14px 0 0; }
+.mc-checkout-section .form-row.place-order #place_order,
+.mc-checkout-section .form-row.place-order button#place_order {
+  display: flex;
+  align-items: center; justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 16px;
+  background: #fbbf24;
+  color: #1a1a1a;
+  border: none;
+  border-radius: 999px;
+  font-size: 16px; font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: background .12s, transform .08s;
+  box-sizing: border-box;
 }
-.mc-checkout-section #place_order:hover {
-  background: #f59e0b !important;
+.mc-checkout-section .form-row.place-order #place_order:hover { background: #f59e0b; }
+.mc-checkout-section .form-row.place-order #place_order:active { transform: scale(0.99); }
+
+/* Inline payment-method trust strip (just above gateway list) */
+.mc-pay-trust {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  background: #f9fafb;
+  border: 1px solid #f3f4f6;
+  border-radius: 8px;
 }
+.mc-pay-trust-text {
+  margin-left: auto;
+  font-size: 12px; color: #6b7280; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+
+/* Collapsible <details> sections for coupon + notes */
+.mc-checkout-collapsible {
+  margin-bottom: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  overflow: hidden;
+}
+.mc-checkout-collapsible > summary {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 16px;
+  font-size: 14px; font-weight: 600; color: #1e40af;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.mc-checkout-collapsible > summary::-webkit-details-marker { display: none; }
+.mc-checkout-collapsible > summary::after {
+  content: '+';
+  margin-left: auto;
+  font-size: 18px; font-weight: 600; color: #6b7280;
+  line-height: 1;
+}
+.mc-checkout-collapsible[open] > summary::after { content: '−'; }
+.mc-checkout-collapsible > summary:hover { background: #f9fafb; }
+
+.mc-checkout-coupon-row {
+  display: flex; gap: 10px;
+  padding: 0 16px 16px;
+}
+.mc-checkout-coupon-input {
+  flex: 1;
+  min-height: 42px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0 14px;
+  font-size: 14px;
+  background: #ffffff;
+}
+.mc-checkout-coupon-input:focus { outline: none; border-color: #1e40af; }
+.mc-checkout-coupon-apply {
+  padding: 0 22px;
+  background: #1a1a1a;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mc-checkout-coupon-apply:hover { background: #374151; }
+
+.mc-checkout-applied {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 0 16px 16px;
+}
+.mc-checkout-applied-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  background: #ecfdf5; color: #065f46;
+  border-radius: 999px;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.mc-checkout-applied-pill a {
+  color: #065f46; text-decoration: none;
+  font-size: 16px; line-height: 1;
+}
+.mc-checkout-applied-pill a:hover { color: #dc2626; }
+
+.mc-checkout-notes {
+  width: calc(100% - 32px);
+  margin: 0 16px 16px;
+  min-height: 80px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #ffffff;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.mc-checkout-notes:focus { outline: none; border-color: #1e40af; }
+
+/* Edit-cart link in right rail head */
+.mc-rail-head-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.mc-rail-head-row .mc-rail-heading { margin: 0; }
+.mc-rail-edit {
+  font-size: 13px; color: #1e40af; text-decoration: none; font-weight: 600;
+}
+.mc-rail-edit:hover { text-decoration: underline; }
+
+/* Estimated delivery row in rail */
+.mc-rail-eta {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+}
+.mc-eta-icon { font-size: 18px; line-height: 1; }
+.mc-eta-text { font-size: 13px; color: #166534; line-height: 1.4; }
+.mc-eta-text strong { color: #14532d; font-weight: 700; }
 
 /* Terms + privacy notice */
 .mc-checkout-section .woocommerce-terms-and-conditions-wrapper {

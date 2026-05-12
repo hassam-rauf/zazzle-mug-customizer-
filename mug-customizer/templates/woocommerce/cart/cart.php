@@ -143,28 +143,27 @@ $promo_code   = get_option('mc_promo_code', 'MAYDEALS4YOU');
               </div>
             </div>
 
-            <div class="mc-item-qty">
-              <select name="cart[<?php echo esc_attr($cart_item_key); ?>][qty]" class="mc-qty-select" data-key="<?php echo esc_attr($cart_item_key); ?>">
-                <?php for ($i = 1; $i <= 99; $i++) : ?>
-                  <option value="<?php echo esc_attr($i); ?>" <?php selected($cart_item['quantity'], $i); ?>><?php echo (int) $i; ?></option>
-                <?php endfor; ?>
-              </select>
-              <span class="mc-qty-label"><?php echo $cart_item['quantity'] === 1 ? esc_html__('mug', 'mug-customizer') : esc_html__('mugs', 'mug-customizer'); ?></span>
-            </div>
+            <div class="mc-item-aside">
+              <div class="mc-item-qty">
+                <select name="cart[<?php echo esc_attr($cart_item_key); ?>][qty]" class="mc-qty-select" data-key="<?php echo esc_attr($cart_item_key); ?>" aria-label="<?php esc_attr_e('Quantity', 'mug-customizer'); ?>">
+                  <?php for ($i = 1; $i <= 99; $i++) : ?>
+                    <option value="<?php echo esc_attr($i); ?>" <?php selected($cart_item['quantity'], $i); ?>><?php echo (int) $i; ?></option>
+                  <?php endfor; ?>
+                </select>
+                <span class="mc-qty-label"><?php echo $cart_item['quantity'] === 1 ? esc_html__('mug', 'mug-customizer') : esc_html__('mugs', 'mug-customizer'); ?></span>
+              </div>
 
-            <div class="mc-item-price">
-              <?php if ($on_sale && $regular_price > 0) : ?>
-                <div class="mc-price-comp"><?php echo wc_price($line_regular); ?> <?php esc_html_e('Comp. value', 'mug-customizer'); ?></div>
-              <?php endif; ?>
-              <div class="mc-price-current"><?php echo wc_price($line_subtotal); ?></div>
-              <?php if ($saved > 0) : ?>
-                <div class="mc-price-saved">
-                  <?php /* translators: %s = amount saved */ printf(esc_html__('You saved %s', 'mug-customizer'), wc_price($saved)); ?>
-                </div>
-              <?php endif; ?>
-              <?php if (!empty($promo_code)) : ?>
-                <div class="mc-price-promo"><?php echo esc_html($promo_code); ?></div>
-              <?php endif; ?>
+              <div class="mc-item-price">
+                <?php if ($on_sale && $regular_price > 0) : ?>
+                  <div class="mc-price-comp"><?php echo wc_price($line_regular); ?></div>
+                <?php endif; ?>
+                <div class="mc-price-current"><?php echo wc_price($line_subtotal); ?></div>
+                <?php if ($saved > 0) : ?>
+                  <div class="mc-price-saved">
+                    <?php /* translators: %s = amount saved */ printf(esc_html__('You saved %s', 'mug-customizer'), wc_price($saved)); ?>
+                  </div>
+                <?php endif; ?>
+              </div>
             </div>
           </div>
         <?php endforeach; ?>
@@ -196,41 +195,10 @@ $promo_code   = get_option('mc_promo_code', 'MAYDEALS4YOU');
 
       </div><!-- /.mc-cart-items -->
 
-      <!-- RIGHT: payment + subtotal rail -->
+      <!-- RIGHT: order summary rail -->
       <aside class="mc-cart-rail">
 
-        <h3 class="mc-pay-header"><?php esc_html_e('Select a Payment Method', 'mug-customizer'); ?></h3>
-        <div class="mc-pay-list">
-          <label class="mc-pay-row">
-            <input type="radio" name="mc_payment" value="card" checked>
-            <span class="mc-pay-logos">
-              <span class="mc-pay-logo visa">VISA</span>
-              <span class="mc-pay-logo mc">MC</span>
-              <span class="mc-pay-logo amex">AMEX</span>
-            </span>
-          </label>
-          <label class="mc-pay-row">
-            <input type="radio" name="mc_payment" value="paypal">
-            <span class="mc-pay-logos"><span class="mc-pay-logo paypal">PayPal</span></span>
-          </label>
-          <label class="mc-pay-row">
-            <input type="radio" name="mc_payment" value="gpay">
-            <span class="mc-pay-logos"><span class="mc-pay-logo gpay">G Pay</span></span>
-          </label>
-          <label class="mc-pay-row">
-            <input type="radio" name="mc_payment" value="klarna">
-            <span class="mc-pay-logos">
-              <span class="mc-pay-logo klarna">Klarna</span>
-              <span class="mc-pay-tagline"><?php esc_html_e('Buy now, pay later', 'mug-customizer'); ?></span>
-            </span>
-          </label>
-          <label class="mc-pay-row">
-            <input type="radio" name="mc_payment" value="venmo">
-            <span class="mc-pay-logos"><span class="mc-pay-logo venmo">venmo</span></span>
-          </label>
-        </div>
-
-        <hr class="mc-rail-hr">
+        <h3 class="mc-rail-heading"><?php esc_html_e('Order Summary', 'mug-customizer'); ?></h3>
 
         <?php
         $regular_total  = 0;
@@ -241,7 +209,7 @@ $promo_code   = get_option('mc_promo_code', 'MAYDEALS4YOU');
         $saved_total   = max(0, $regular_total - $current_total);
         ?>
         <div class="mc-rail-subtotal-row">
-          <span class="mc-rail-label"><?php esc_html_e('Subtotal:', 'mug-customizer'); ?>*</span>
+          <span class="mc-rail-label"><?php esc_html_e('Subtotal', 'mug-customizer'); ?></span>
           <span class="mc-rail-prices">
             <?php if ($saved_total > 0) : ?>
               <span class="mc-rail-comp"><?php echo wc_price($regular_total); ?></span>
@@ -253,11 +221,25 @@ $promo_code   = get_option('mc_promo_code', 'MAYDEALS4YOU');
           <div class="mc-rail-saved"><?php /* translators: %s = saved amount */ printf(esc_html__('You saved %s', 'mug-customizer'), wc_price($saved_total)); ?></div>
         <?php endif; ?>
 
+        <p class="mc-rail-foot"><?php esc_html_e('Shipping & taxes calculated at checkout', 'mug-customizer'); ?></p>
+
         <a href="<?php echo esc_url(wc_get_checkout_url()); ?>" class="mc-checkout-btn">
-          <span class="mc-lock" aria-hidden="true">🔒</span> <?php esc_html_e('Proceed to Checkout', 'mug-customizer'); ?>
+          <span class="mc-lock" aria-hidden="true">🔒</span>
+          <span><?php esc_html_e('Proceed to Checkout', 'mug-customizer'); ?></span>
         </a>
 
-        <p class="mc-rail-foot"><?php esc_html_e('*Shipping and Taxes calculated at checkout', 'mug-customizer'); ?></p>
+        <!-- Trust strip: decorative-only, indicates accepted payment brands.
+             Real gateway selection happens on /checkout/ via WC. -->
+        <div class="mc-trust-strip">
+          <span class="mc-trust-icon-sm" aria-hidden="true">🔒</span>
+          <span class="mc-trust-text"><?php esc_html_e('Secure checkout — your data is encrypted', 'mug-customizer'); ?></span>
+        </div>
+        <div class="mc-brand-strip" aria-label="<?php esc_attr_e('Accepted payment methods', 'mug-customizer'); ?>">
+          <span class="mc-brand visa">VISA</span>
+          <span class="mc-brand mc">MC</span>
+          <span class="mc-brand amex">AMEX</span>
+          <span class="mc-brand paypal">PayPal</span>
+        </div>
 
       </aside>
 

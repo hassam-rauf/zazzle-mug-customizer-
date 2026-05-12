@@ -1,10 +1,10 @@
 <?php
 /**
- * Checkout Form (Zazzle parity)
+ * Checkout Form (Zazzle parity, v2.1.3)
  *
- * Overrides woocommerce/checkout/form-checkout.php — keeps all standard WC
- * hooks/actions intact (so payment gateways, plugins, etc. hook normally)
- * while wrapping them in a Zazzle-styled 2-column layout.
+ * Overrides woocommerce/checkout/form-checkout.php. Numbered step layout
+ * (Shipping → Payment → Review) with all WC actions intact so payment
+ * gateways and plugins hook normally.
  *
  * @package Mug_Customizer
  */
@@ -19,6 +19,12 @@ if (!$checkout->is_registration_enabled() && $checkout->is_registration_required
 
 $current_user = wp_get_current_user();
 $first_name   = $current_user->ID ? ($current_user->first_name ?: $current_user->display_name) : '';
+
+// Estimated delivery date — 7 business days. Falls back to a calendar offset
+// if the cart-handler helper isn't loaded yet.
+$ship_eta = function_exists('mc_cart_business_date')
+    ? mc_cart_business_date(7)
+    : date_i18n(get_option('date_format', 'M j'), strtotime('+10 days'));
 ?>
 
 <div id="mc-checkout-wrap">
@@ -33,30 +39,44 @@ $first_name   = $current_user->ID ? ($current_user->first_name ?: $current_user-
     <?php endif; ?>
   </div>
 
-  <div class="mc-cart-trust">
-    <span class="mc-trust-icon" aria-hidden="true">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.5-9.5-9C.5 8 3.5 4 7 4c2 0 3.5 1 5 3 1.5-2 3-3 5-3 3.5 0 6.5 4 4.5 8C19 16.5 12 21 12 21z"/></svg>
-    </span>
-    <strong><?php esc_html_e('Secure checkout — your data is safe with us', 'mug-customizer'); ?></strong>
+  <!-- Trust badges row — 3-icon reassurance strip -->
+  <div class="mc-trust-row">
+    <div class="mc-trust-item">
+      <span class="mc-trust-i" aria-hidden="true">🔒</span>
+      <span><?php esc_html_e('Secure SSL checkout', 'mug-customizer'); ?></span>
+    </div>
+    <div class="mc-trust-item">
+      <span class="mc-trust-i" aria-hidden="true">🚚</span>
+      <span><?php esc_html_e('Fast shipping', 'mug-customizer'); ?></span>
+    </div>
+    <div class="mc-trust-item">
+      <span class="mc-trust-i" aria-hidden="true">↩</span>
+      <span><?php esc_html_e('30-day returns', 'mug-customizer'); ?></span>
+    </div>
   </div>
 
-  <form name="checkout" method="post" class="checkout woocommerce-checkout" action="<?php echo esc_url(wc_get_checkout_url()); ?>" enctype="multipart/form-data">
+  <form name="checkout" id="checkout" method="post" class="checkout woocommerce-checkout" action="<?php echo esc_url(wc_get_checkout_url()); ?>" enctype="multipart/form-data">
 
     <div class="mc-checkout-grid">
 
-      <!-- LEFT: customer + shipping + payment -->
+      <!-- LEFT: numbered steps -->
       <div class="mc-checkout-main">
 
         <?php if (sizeof($checkout->get_checkout_fields())) : ?>
           <?php do_action('woocommerce_checkout_before_customer_details'); ?>
 
-          <section class="mc-checkout-section" id="mc-customer-details">
-            <h2 class="mc-section-title"><?php esc_html_e('Contact information', 'mug-customizer'); ?></h2>
-            <div class="col2-set" id="customer_details">
-              <div class="col-1">
+          <!-- Step 1: Shipping address -->
+          <section class="mc-checkout-section" id="mc-step-shipping">
+            <h2 class="mc-section-title">
+              <span class="mc-step-num">1</span>
+              <span class="mc-step-icon" aria-hidden="true">📦</span>
+              <?php esc_html_e('Shipping address', 'mug-customizer'); ?>
+            </h2>
+            <div id="customer_details">
+              <div class="mc-checkout-billing">
                 <?php do_action('woocommerce_checkout_billing'); ?>
               </div>
-              <div class="col-2">
+              <div class="mc-checkout-shipping">
                 <?php do_action('woocommerce_checkout_shipping'); ?>
               </div>
             </div>
@@ -65,21 +85,91 @@ $first_name   = $current_user->ID ? ($current_user->first_name ?: $current_user-
           <?php do_action('woocommerce_checkout_after_customer_details'); ?>
         <?php endif; ?>
 
-        <section class="mc-checkout-section" id="mc-payment-section">
-          <h2 class="mc-section-title"><?php esc_html_e('Payment options', 'mug-customizer'); ?></h2>
-          <?php do_action('woocommerce_checkout_before_order_review_heading'); ?>
-          <?php do_action('woocommerce_checkout_before_order_review'); ?>
-          <div id="order_review" class="woocommerce-checkout-review-order">
-            <?php do_action('woocommerce_checkout_order_review'); ?>
+        <!-- Step 2: Payment method -->
+        <section class="mc-checkout-section" id="mc-step-payment">
+          <h2 class="mc-section-title">
+            <span class="mc-step-num">2</span>
+            <span class="mc-step-icon" aria-hidden="true">💳</span>
+            <?php esc_html_e('Payment method', 'mug-customizer'); ?>
+          </h2>
+
+          <!-- Inline trust strip — reassurance right at payment decision point -->
+          <div class="mc-pay-trust">
+            <span class="mc-brand visa">VISA</span>
+            <span class="mc-brand mc">MC</span>
+            <span class="mc-brand amex">AMEX</span>
+            <span class="mc-brand paypal">PayPal</span>
+            <span class="mc-pay-trust-text">
+              <span aria-hidden="true">🔒</span>
+              <?php esc_html_e('Encrypted &amp; secure', 'mug-customizer'); ?>
+            </span>
           </div>
+
+          <?php do_action('woocommerce_checkout_before_order_review'); ?>
+
+          <!-- Render ONLY the payment block + place order button, NOT the
+               full review-order table (which would duplicate the right-rail
+               summary). woocommerce_checkout_payment() outputs <div id="payment">
+               with gateways + terms + place_order + nonce — exactly what we need. -->
+          <div id="order_review" class="woocommerce-checkout-review-order">
+            <?php woocommerce_checkout_payment(); ?>
+          </div>
+
           <?php do_action('woocommerce_checkout_after_order_review'); ?>
+        </section>
+
+        <!-- Step 3: Review extras (coupon + notes) -->
+        <section class="mc-checkout-section" id="mc-step-extras">
+          <h2 class="mc-section-title">
+            <span class="mc-step-num">3</span>
+            <span class="mc-step-icon" aria-hidden="true">✨</span>
+            <?php esc_html_e('Add a touch (optional)', 'mug-customizer'); ?>
+          </h2>
+
+          <!-- Coupon code — collapsible to keep the section clean -->
+          <details class="mc-checkout-collapsible">
+            <summary>
+              <span aria-hidden="true">🏷️</span>
+              <?php esc_html_e('Have a promo code?', 'mug-customizer'); ?>
+            </summary>
+            <div class="mc-checkout-coupon-row">
+              <input type="text" name="coupon_code" id="checkout_coupon_code" class="mc-checkout-coupon-input" placeholder="<?php esc_attr_e('Enter code', 'mug-customizer'); ?>" autocomplete="off">
+              <button type="submit" name="apply_coupon" value="<?php esc_attr_e('Apply', 'mug-customizer'); ?>" class="mc-checkout-coupon-apply"><?php esc_html_e('Apply', 'mug-customizer'); ?></button>
+            </div>
+            <?php
+            $applied = WC()->cart->get_applied_coupons();
+            if (!empty($applied)) : ?>
+              <div class="mc-checkout-applied">
+                <?php foreach ($applied as $code) : ?>
+                  <span class="mc-checkout-applied-pill">
+                    <?php echo esc_html(strtoupper($code)); ?>
+                    <a href="<?php echo esc_url(wc_get_cart_remove_coupon_url($code)); ?>" aria-label="<?php esc_attr_e('Remove coupon', 'mug-customizer'); ?>">×</a>
+                  </span>
+                <?php endforeach; ?>
+              </div>
+            <?php endif; ?>
+          </details>
+
+          <!-- Order notes — gift message / delivery instructions -->
+          <details class="mc-checkout-collapsible">
+            <summary>
+              <span aria-hidden="true">🎁</span>
+              <?php esc_html_e('Add a gift note or delivery instructions', 'mug-customizer'); ?>
+            </summary>
+            <textarea name="order_comments" id="order_comments" rows="3" class="mc-checkout-notes" placeholder="<?php esc_attr_e('e.g., Happy Birthday Mom! / Leave at front door', 'mug-customizer'); ?>"><?php echo esc_textarea($checkout->get_value('order_comments')); ?></textarea>
+          </details>
         </section>
 
       </div><!-- /.mc-checkout-main -->
 
-      <!-- RIGHT: order summary (sticky) -->
+      <!-- RIGHT: sticky order summary -->
       <aside class="mc-checkout-rail">
-        <h3 class="mc-rail-heading"><?php esc_html_e('Order summary', 'mug-customizer'); ?></h3>
+        <div class="mc-rail-head-row">
+          <h3 class="mc-rail-heading"><?php esc_html_e('Order summary', 'mug-customizer'); ?></h3>
+          <a href="<?php echo esc_url(wc_get_cart_url()); ?>" class="mc-rail-edit">
+            <?php esc_html_e('← Edit cart', 'mug-customizer'); ?>
+          </a>
+        </div>
 
         <div class="mc-rail-items">
           <?php foreach (WC()->cart->get_cart() as $cart_item_key => $cart_item) :
@@ -87,8 +177,7 @@ $first_name   = $current_user->ID ? ($current_user->first_name ?: $current_user-
             if (!$product || !$product->exists() || $cart_item['quantity'] <= 0) continue;
             $name      = apply_filters('woocommerce_cart_item_name', $product->get_name(), $cart_item, $cart_item_key);
             $thumbnail = apply_filters('woocommerce_cart_item_thumbnail', $product->get_image('woocommerce_thumbnail'), $cart_item, $cart_item_key);
-            // v2.0.7: only use saved-file preview, never the inline data URL
-            // (legacy cart items carry pre-fix dirty editor-canvas data URLs).
+            // v2.0.7: file-based preview only; never inline data URL.
             $design_thumb = '';
             if (!empty($cart_item['_mug_design']) && class_exists('Mug_Customizer_Design_Storage')) {
               $storage = new Mug_Customizer_Design_Storage();
@@ -165,6 +254,15 @@ $first_name   = $current_user->ID ? ($current_user->first_name ?: $current_user-
         <div class="mc-rail-total-row">
           <span class="mc-rail-total-label"><?php esc_html_e('Total', 'mug-customizer'); ?></span>
           <span class="mc-rail-total-amount"><?php wc_cart_totals_order_total_html(); ?></span>
+        </div>
+
+        <!-- Estimated delivery — reinforces the cart-page promise -->
+        <div class="mc-rail-eta">
+          <span class="mc-eta-icon" aria-hidden="true">🚚</span>
+          <span class="mc-eta-text">
+            <?php esc_html_e('Estimated delivery by', 'mug-customizer'); ?>
+            <strong><?php echo esc_html($ship_eta); ?></strong>
+          </span>
         </div>
 
       </aside>
