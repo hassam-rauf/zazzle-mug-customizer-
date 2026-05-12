@@ -103,4 +103,65 @@ class Mug_Customizer_Design_Storage {
 
         return $url_dir . '/' . $filename;
     }
+
+    /**
+     * Persist the high-resolution print-ready PNG (300 DPI, cropped to print
+     * area) produced by the editor's `exportPrintFile()`. Returned by the
+     * REST `/cart/add` endpoint at cart-add time so the press team can
+     * download the production file directly from the order screen.
+     *
+     * Saved to `uploads/mug-designs/print-files/<hash>-<ts>.png`. Print files
+     * can exceed the 6 MB preview cap — we allow up to 15 MB.
+     */
+    public function save_print_file_from_data_url(string $data_url) {
+        if (strpos($data_url, 'data:image/') !== 0) {
+            return new WP_Error('bad_data_url', 'Not a valid image data URL.');
+        }
+
+        $comma = strpos($data_url, ',');
+        if ($comma === false) {
+            return new WP_Error('malformed_data_url', 'Data URL is malformed.');
+        }
+        $base64 = substr($data_url, $comma + 1);
+        $binary = base64_decode($base64, true);
+        if ($binary === false) {
+            return new WP_Error('decode_failed', 'Failed to decode print file data.');
+        }
+
+        if (strlen($binary) > 15 * 1024 * 1024) {
+            return new WP_Error('too_large', 'Print file too large.');
+        }
+
+        $upload  = wp_upload_dir();
+        $sub_dir = '/' . MUG_CUSTOMIZER_UPLOAD_DIR . '/print-files';
+        $dir     = $upload['basedir'] . $sub_dir;
+        $url_dir = $upload['baseurl'] . $sub_dir;
+        wp_mkdir_p($dir);
+
+        // Same .htaccess pattern as previews — parent denies, we re-allow PNG.
+        // Hashes in filenames make URLs effectively unguessable; for tighter
+        // production security a capability-checked download endpoint should
+        // serve these files instead of direct Apache delivery (TODO).
+        $allow_htaccess = $dir . '/.htaccess';
+        if (! file_exists($allow_htaccess)) {
+            file_put_contents(
+                $allow_htaccess,
+                "<Files *.png>\n"
+                . "  Order allow,deny\n"
+                . "  Allow from all\n"
+                . "  Require all granted\n"
+                . "</Files>\n"
+            );
+        }
+
+        $hash     = substr(md5($binary), 0, 12);
+        $filename = 'print-' . $hash . '-' . time() . '.png';
+        $path     = $dir . '/' . $filename;
+
+        if (file_put_contents($path, $binary) === false) {
+            return new WP_Error('write_failed', 'Could not write print file.');
+        }
+
+        return $url_dir . '/' . $filename;
+    }
 }

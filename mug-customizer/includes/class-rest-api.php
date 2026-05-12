@@ -174,10 +174,7 @@ class Mug_Customizer_Rest_Api {
         }
 
         // Persist the rendered design preview (mug + user design composite)
-        // as a PNG file in uploads/. If the file save succeeds we drop the
-        // giant base64 from the payload (keeps cart-item meta lean). If it
-        // fails (write permission etc.), we KEEP mockup_data_url so the cart
-        // template can still render the design inline as `data:` URL.
+        // as a PNG file in uploads/mug-designs/previews/. Cart-thumbnail use.
         if (!empty($design['mockup_data_url'])) {
             $preview_url = $storage->save_preview_from_data_url($design['mockup_data_url']);
             if (!is_wp_error($preview_url)) {
@@ -185,6 +182,29 @@ class Mug_Customizer_Rest_Api {
                 unset($design['mockup_data_url']);
             } else {
                 error_log('[MugCustomizer] preview save failed: ' . $preview_url->get_error_message());
+            }
+        }
+
+        // Persist the 300 DPI production print file (cropped to print area,
+        // produced by editor exportPrintFile()) to uploads/mug-designs/print-
+        // files/. Production team downloads this from the admin order screen.
+        // Drop the giant base64 from the cart_item_data — keeps order meta lean.
+        if (!empty($design['print_file']['data_url'])) {
+            $pf_url = $storage->save_print_file_from_data_url($design['print_file']['data_url']);
+            if (!is_wp_error($pf_url)) {
+                $design['print_file_url'] = $pf_url;
+                if (!empty($design['print_file']['width_in']))  $design['print_file_dims'] = [
+                    'w_in'  => (float) $design['print_file']['width_in'],
+                    'h_in'  => (float) $design['print_file']['height_in'],
+                    'w_px'  => (int)   $design['print_file']['width_px'],
+                    'h_px'  => (int)   $design['print_file']['height_px'],
+                    'dpi'   => (int)   $design['print_file']['dpi'],
+                ];
+                unset($design['print_file']);
+            } else {
+                error_log('[MugCustomizer] print file save failed: ' . $pf_url->get_error_message());
+                // Drop the base64 anyway — too big for cart_item_data
+                unset($design['print_file']);
             }
         }
 
