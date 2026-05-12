@@ -6,8 +6,9 @@
   const mc  = window.mugCustomizer || {};
 
   // Merge mockup map from both sources
-  const mockupMap  = cfg.mockupMap  || mc.mockupMap  || {};
-  const placeholder = cfg.placeholder || (mc.pluginUrl + 'public/assets/images/placeholder-mug.png');
+  const mockupMap     = cfg.mockupMap     || mc.mockupMap || {};
+  const defaultAngles = cfg.defaultAngles || {};
+  const placeholder   = cfg.placeholder   || (mc.pluginUrl + 'public/assets/images/placeholder-mug.png');
 
   let selected = Object.assign({ style: 'classic', size: '11oz', color: 'white' }, cfg.selected || {});
 
@@ -18,9 +19,12 @@
       .replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
   }
 
+  // Fallback chain: variant-specific mockup → generic angle photo → placeholder.
+  // Lets the page render real mug photos even when the admin hasn't uploaded
+  // per-variant mockups.
   function getMockupUrl(angle) {
     const key = buildKey(selected.style, selected.size, selected.color, angle);
-    return mockupMap[key] || placeholder;
+    return mockupMap[key] || defaultAngles[angle] || placeholder;
   }
 
   // ── Image Updates ─────────────────────────────────────────────────────────
@@ -31,9 +35,8 @@
   }
 
   function updateAllThumbs() {
-    const angles = ['front', 'back', 'side', 'lifestyle'];
-    document.querySelectorAll('.thumb-strip .thumb').forEach(function (el, i) {
-      const angle = el.dataset.angle || angles[i] || 'front';
+    document.querySelectorAll('.thumb-strip .thumb').forEach(function (el) {
+      const angle = el.dataset.angle || 'front';
       const url   = getMockupUrl(angle);
       const img   = el.querySelector('img');
       if (img) img.src = url;

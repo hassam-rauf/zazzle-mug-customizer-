@@ -302,6 +302,74 @@ html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFo
   font-weight: 700;
 }
 
+/* Promo code line — sits below price, above shipping note */
+.pdp-promo-line {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #dc2626;
+  font-weight: 500;
+}
+.pdp-promo-line strong { font-weight: 700; letter-spacing: 0.3px; }
+
+/* Visual style swatch selector (Zazzle parity) — photo + name + upgrade chip */
+.pdp-style-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 2px;
+}
+.pdp-style-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 78px;
+  padding: 6px 4px 8px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color .15s, transform .08s;
+  text-align: center;
+}
+.pdp-style-swatch:hover { border-color: var(--muted); }
+.pdp-style-swatch.selected {
+  border-color: var(--brand);
+  background: #ffffff;
+}
+.pdp-style-swatch.selected .pdp-ss-thumb { box-shadow: inset 0 0 0 1px var(--brand); }
+.pdp-ss-thumb {
+  width: 62px;
+  height: 62px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f5f5f5;
+  border: 1px solid #f3f4f6;
+}
+.pdp-ss-thumb img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.pdp-ss-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1.2;
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pdp-ss-upgrade {
+  font-size: 10px;
+  color: #6b7280;
+  font-weight: 600;
+  line-height: 1;
+}
+.pdp-ss-upgrade .woocommerce-Price-amount { font-size: 10px; font-weight: 600; }
+
 /* Swatches */
 .pdp-swatches { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 2px; }
 .swatch {

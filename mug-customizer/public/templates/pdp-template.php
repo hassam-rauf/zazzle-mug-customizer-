@@ -41,10 +41,35 @@ function mug_pdp_mockup_url($mockup_map, $style, $size, $color, $angle, $placeho
     return $mockup_map[$key] ?? $placeholder;
 }
 
-$angles = ['front', 'back', 'side', 'lifestyle'];
+// Real angle photos shipped with the plugin in public/assets/images/.
+// Used as a fallback whenever the admin hasn't uploaded a variant-specific
+// mockup via the product meta box. Order here = order in the thumb strip.
+$images_base = MUG_CUSTOMIZER_PLUGIN_URL . 'public/assets/images/';
+$default_angle_imgs = [
+    'front'       => $images_base . 'mug-center.jpg',
+    'front-left'  => $images_base . 'mug-front-left.jpg',
+    'front-right' => $images_base . 'mug-front-right.jpg',
+    'left'        => $images_base . 'mug-left.jpg',
+    'right'       => $images_base . 'mug-right.jpg',
+    'handle'      => $images_base . 'mug-handle.jpg',
+    'lifestyle'   => $images_base . 'mug-donut.jpg',
+];
+$angle_labels = [
+    'front'       => 'Front',
+    'front-left'  => 'Front Left',
+    'front-right' => 'Front Right',
+    'left'        => 'Left',
+    'right'       => 'Right',
+    'handle'      => 'Handle',
+    'lifestyle'   => 'Lifestyle',
+];
+$angles = array_keys($default_angle_imgs);
+
 $thumb_urls = [];
 foreach ($angles as $angle) {
-    $thumb_urls[$angle] = mug_pdp_mockup_url($mockup_map, $sel_style, $sel_size, $sel_color, $angle, $placeholder);
+    // Variant-specific mockup wins; otherwise fall back to the angle photo.
+    $variant_url = mug_pdp_mockup_url($mockup_map, $sel_style, $sel_size, $sel_color, $angle, '');
+    $thumb_urls[$angle] = $variant_url !== '' ? $variant_url : $default_angle_imgs[$angle];
 }
 $main_img_url = $thumb_urls['front'];
 
@@ -147,12 +172,16 @@ $color_hex = [
 
     <!-- Left: Vertical Thumb Strip -->
     <div class="thumb-strip">
-      <?php foreach ($angles as $i => $angle) : ?>
+      <?php foreach ($angles as $i => $angle) :
+        $label = $angle_labels[$angle] ?? ucfirst(str_replace('-', ' ', $angle));
+      ?>
         <div class="thumb <?php echo $i === 0 ? 'active' : ''; ?>"
              data-angle="<?php echo esc_attr($angle); ?>"
-             data-src="<?php echo esc_url($thumb_urls[$angle]); ?>">
+             data-src="<?php echo esc_url($thumb_urls[$angle]); ?>"
+             title="<?php echo esc_attr($label); ?>">
           <img src="<?php echo esc_url($thumb_urls[$angle]); ?>"
-               alt="<?php echo esc_attr(ucfirst($angle)); ?>">
+               alt="<?php echo esc_attr($product->get_name() . ' — ' . $label); ?>"
+               loading="<?php echo $i === 0 ? 'eager' : 'lazy'; ?>">
         </div>
       <?php endforeach; ?>
     </div>
@@ -214,23 +243,61 @@ $color_hex = [
           </div>
         <?php endif; ?>
         <div class="price-unit"><?php esc_html_e('per mug', 'mug-customizer'); ?></div>
+        <div class="pdp-promo-line">
+          <?php
+          $promo_code = apply_filters('mug_pdp_promo_code', get_option('mc_promo_code', 'MAY15'));
+          /* translators: %s = promo code */
+          printf(esc_html__('Save 15%% with code %s', 'mug-customizer'), '<strong>' . esc_html($promo_code) . '</strong>');
+          ?>
+        </div>
         <div class="price-shipping"><?php esc_html_e('Free shipping on orders over $35', 'mug-customizer'); ?></div>
       </div>
 
-      <!-- Style -->
+      <!-- Style — visual swatch selector with photo thumbnails + upgrade prices -->
       <?php if (! empty($styles)) : ?>
       <div class="option-block" data-option="style">
         <div class="opt-heading">
           <?php esc_html_e('Style', 'mug-customizer'); ?>
           <span class="opt-selected-label" id="selected-style-label"><?php echo esc_html($sel_style); ?></span>
         </div>
-        <div class="pill-group">
-          <?php foreach ($styles as $style_opt) : ?>
+        <div class="pdp-style-swatches">
+          <?php
+          // Static upgrade-price overlay — production version should pull
+          // from each variation's actual price delta over the base SKU.
+          $style_upgrade = [
+            'classic'  => 0,
+            'travel'   => 1.75,
+            'espresso' => 2.50,
+            'two-tone' => 4.35,
+          ];
+          // Map each style to a representative photo. We only have Classic
+          // photos shipped; other styles re-use the same hero so the swatch
+          // is recognisable but distinguished by label + upgrade chip.
+          $style_thumb = [
+            'classic'  => $default_angle_imgs['front-left'],
+            'travel'   => $default_angle_imgs['handle'],
+            'espresso' => $default_angle_imgs['front-right'],
+            'two-tone' => $default_angle_imgs['left'],
+          ];
+          foreach ($styles as $style_opt) :
+            $skey    = strtolower($style_opt);
+            $upgrade = $style_upgrade[$skey] ?? 0;
+            $thumb   = $style_thumb[$skey] ?? $default_angle_imgs['front'];
+            $is_sel  = $skey === strtolower($sel_style);
+          ?>
             <button type="button"
-                    class="pill<?php echo strtolower($style_opt) === strtolower($sel_style) ? ' selected' : ''; ?>"
+                    class="pdp-style-swatch pill<?php echo $is_sel ? ' selected' : ''; ?>"
                     data-option="style"
-                    data-value="<?php echo esc_attr(strtolower($style_opt)); ?>">
-              <?php echo esc_html($style_opt); ?>
+                    data-value="<?php echo esc_attr($skey); ?>"
+                    aria-pressed="<?php echo $is_sel ? 'true' : 'false'; ?>"
+                    title="<?php echo esc_attr($style_opt); ?>">
+              <span class="pdp-ss-thumb">
+                <img src="<?php echo esc_url($thumb); ?>" alt="<?php echo esc_attr($style_opt); ?>" loading="lazy">
+              </span>
+              <span class="pdp-ss-name"><?php echo esc_html($style_opt); ?></span>
+              <span class="pdp-ss-upgrade">
+                <?php echo $upgrade > 0 ? '+' . esc_html(wc_price($upgrade)) : '&mdash;'; ?>
+              </span>
             </button>
           <?php endforeach; ?>
         </div>
@@ -424,10 +491,11 @@ $color_hex = [
 <!-- JS config -->
 <script>
 window.mugPdpConfig = {
-  productId:   <?php echo (int) $product_id; ?>,
-  designerUrl: <?php echo wp_json_encode($designer_base); ?>,
-  mockupMap:   <?php echo wp_json_encode($mockup_map); ?>,
-  placeholder: <?php echo wp_json_encode($placeholder); ?>,
+  productId:     <?php echo (int) $product_id; ?>,
+  designerUrl:   <?php echo wp_json_encode($designer_base); ?>,
+  mockupMap:     <?php echo wp_json_encode($mockup_map); ?>,
+  defaultAngles: <?php echo wp_json_encode($default_angle_imgs); ?>,
+  placeholder:   <?php echo wp_json_encode($placeholder); ?>,
   selected: {
     style: <?php echo wp_json_encode(strtolower($sel_style)); ?>,
     size:  <?php echo wp_json_encode(strtolower($sel_size)); ?>,
